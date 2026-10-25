@@ -1,0 +1,1039 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1e1e2e">
+<meta property="og:title" content="Sixes — your move">
+<meta property="og:description" content="Tap to open the game">
+<title>Sixes</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+:root {
+  --bg: #1e1e2e; --mantle: #181825; --crust: #11111b;
+  --surface: #313244; --surface2: #45475a; --overlay: #6c7086;
+  --text: #cdd6f4; --sub: #a6adc8; --peach: #fab387; --green: #a6e3a1; --red: #f38ba8;
+  --k0: #ff5f6d; --k1: #ff9f43; --k2: #ffd43b; --k3: #51cf66; --k4: #4dabf7; --k5: #b197fc;
+  --rk: min(52px, calc((min(100vw, 480px) - 72px) / 6));
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body { font: 15px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, system-ui, sans-serif; overscroll-behavior: none; }
+button { font: inherit; color: inherit; border: 0; background: none; padding: 0; cursor: pointer; touch-action: manipulation; }
+button:disabled { opacity: .45; cursor: default; }
+#app { max-width: 480px; margin: 0 auto; padding: max(12px, env(safe-area-inset-top)) 16px calc(170px + env(safe-area-inset-bottom)); }
+
+.card { background: var(--surface); border-radius: 16px; padding: 14px; margin-bottom: 12px; }
+.kicker { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--sub); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+.btn { background: var(--peach); color: var(--crust); font-weight: 650; border-radius: 12px; padding: 12px 16px; }
+.btn.ghost { background: var(--surface2); color: var(--text); }
+.btn.small { padding: 7px 12px; font-size: 13px; border-radius: 10px; }
+.row { display: flex; gap: 10px; align-items: center; }
+.grow { flex: 1; }
+.muted { color: var(--sub); }
+
+/* tiles */
+.tile { width: 100%; height: 100%; border-radius: 18%; background: linear-gradient(160deg, #24243a, #0e0e18); position: relative;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.12), inset 0 -2px 0 rgba(0,0,0,.5), 0 1px 2px rgba(0,0,0,.4); }
+.tile svg { position: absolute; inset: 12%; width: 76%; height: 76%; }
+.tile.back { background: repeating-linear-gradient(45deg, #3b3c55 0 6px, #34354c 6px 12px); }
+.tile.back svg { display: none; }
+
+/* table */
+.table { background: var(--mantle); border-radius: 14px; overflow: auto; max-height: 54vh; min-height: 180px; padding: 10px;
+         overscroll-behavior: contain; position: relative; }
+.grid { display: grid; gap: 2px; width: max-content; margin: auto; }
+.cell { width: var(--cs); height: var(--cs); border-radius: 18%; position: relative; }
+.cell.spot { box-shadow: inset 0 0 0 2px rgba(250,179,135,.55); background: rgba(250,179,135,.10); cursor: pointer; animation: spot 1.3s ease-in-out infinite; }
+@keyframes spot { 50% { background: rgba(250,179,135,.26); } }
+.cell.draft .tile { outline: 2px solid var(--peach); outline-offset: 1px; }
+.cell.recent::after { content: ""; position: absolute; inset: -1px; border-radius: 20%; box-shadow: 0 0 0 2px rgba(166,227,161,.75); pointer-events: none; }
+.zoom { display: flex; gap: 6px; }
+.zoom button { width: 30px; height: 26px; border-radius: 8px; background: var(--surface2); color: var(--text); font-size: 15px; line-height: 1; }
+
+/* players */
+.chips { display: grid; gap: 8px; margin-bottom: 12px; }
+.pchip { background: var(--surface); border-radius: 12px; padding: 8px 10px; border: 2px solid transparent; min-width: 0; }
+.pchip.on { border-color: var(--peach); }
+.pchip .nm { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pchip .sc { font-size: 22px; font-weight: 750; font-variant-numeric: tabular-nums; display: inline-block; }
+.pchip .hand { display: flex; gap: 2px; margin-top: 3px; }
+.pchip .hand i { width: 7px; height: 7px; border-radius: 2px; background: var(--surface2); }
+
+/* status + bar */
+.status { position: relative; }
+.status .big { font-size: 20px; font-weight: 700; }
+.status .last { color: var(--sub); margin-top: 4px; }
+.replay { position: absolute; top: 14px; right: 14px; font-size: 13px; color: var(--peach); }
+.bar { position: fixed; left: 0; right: 0; bottom: 0; background: rgba(24,24,37,.97); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+       border-top: 1px solid var(--surface); padding: 10px 16px calc(12px + env(safe-area-inset-bottom)); z-index: 5; }
+.bar .in { max-width: 448px; margin: 0 auto; display: grid; gap: 10px; }
+.bar .acts { display: flex; gap: 10px; align-items: center; min-height: 44px; }
+.rack { display: flex; gap: 6px; justify-content: center; }
+.rack .slot { width: var(--rk); height: var(--rk); border-radius: 18%; flex: none; position: relative; }
+.rack .slot.empty { box-shadow: inset 0 0 0 2px var(--surface2); }
+.rack .slot.on .tile { transform: translateY(-8px) scale(1.06); box-shadow: 0 8px 14px rgba(0,0,0,.5), 0 0 0 2px var(--peach); }
+.rack .slot .tile { transition: transform .15s; }
+.rack .slot.mark .tile { transform: translateY(6px) scale(.9); opacity: .55; }
+.rack .slot.mark::after { content: "⇄"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 20px; font-weight: 800; color: var(--peach); }
+.hint { font-size: 13px; color: var(--sub); text-align: center; min-height: 18px; }
+.hint.bad { color: var(--red); }
+.hint b { color: var(--green); }
+.pill { font-size: 12px; padding: 3px 8px; border-radius: 999px; background: var(--surface2); white-space: nowrap; }
+.pill.go { background: var(--peach); color: var(--crust); font-weight: 650; }
+.topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.back { color: var(--peach); font-size: 15px; }
+.bagct { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--sub); }
+.bagct .tile { width: 16px; height: 16px; display: inline-block; }
+
+/* home + forms */
+h1 { font-size: 34px; margin: 18px 0 2px; letter-spacing: -.02em; }
+.game-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; }
+.seg { display: flex; background: var(--mantle); border-radius: 10px; padding: 3px; }
+.seg button { flex: 1; padding: 8px; border-radius: 8px; color: var(--sub); }
+.seg button.on { background: var(--surface2); color: var(--text); font-weight: 650; }
+input[type=text], textarea { width: 100%; background: var(--mantle); color: var(--text); border: 1px solid var(--surface2); border-radius: 10px; padding: 11px 12px; font: inherit; font-size: 16px; }
+textarea { min-height: 110px; resize: vertical; }
+label.check { display: flex; gap: 10px; align-items: center; margin-top: 12px; }
+.stack { display: grid; gap: 8px; }
+.modal { position: fixed; inset: 0; background: rgba(17,17,27,.75); display: grid; place-items: end center; z-index: 10; }
+.modal .sheet { background: var(--surface); width: 100%; max-width: 480px; border-radius: 20px 20px 0 0; padding: 20px 16px calc(20px + env(safe-area-inset-bottom)); }
+.toast { position: fixed; left: 50%; top: max(16px, env(safe-area-inset-top)); transform: translateX(-50%); background: var(--crust); color: var(--text);
+         padding: 10px 14px; border-radius: 12px; z-index: 40; box-shadow: 0 6px 24px rgba(0,0,0,.4); max-width: 90vw; font-size: 14px; }
+.how { font-size: 13px; color: var(--sub); }
+.how b { color: var(--text); }
+.demo { display: flex; gap: 4px; margin: 8px 0; }
+.demo .tile { width: 26px; height: 26px; }
+
+/* animation */
+.fx { position: fixed; inset: 0; pointer-events: none; z-index: 30; overflow: hidden; }
+.fx > .flying { position: fixed; transform-origin: center; filter: drop-shadow(0 8px 10px rgba(0,0,0,.45)); }
+.fx > .confetto { position: fixed; }
+.float { position: fixed; font-weight: 800; font-size: 20px; text-shadow: 0 2px 8px rgba(0,0,0,.7); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.float.plus { color: var(--green); } .float.bonus { color: var(--peach); font-size: 26px; }
+.banner { position: fixed; left: 0; right: 0; top: 36%; text-align: center; font-size: 44px; font-weight: 800; letter-spacing: -.02em; padding: 0 16px;
+          color: var(--peach); text-shadow: 0 4px 28px rgba(0,0,0,.85); }
+.watch { position: fixed; inset: 0; z-index: 12; background: rgba(17,17,27,.55); display: grid; place-content: center; justify-items: center; gap: 16px; }
+.watch .btn { font-size: 18px; padding: 16px 22px; box-shadow: 0 10px 30px rgba(0,0,0,.5); animation: breathe 1.6s ease-in-out infinite; }
+@keyframes breathe { 50% { transform: scale(1.05); } }
+.tally { position: fixed; inset: 0; z-index: 25; background: rgba(17,17,27,.94); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+         display: grid; place-items: center; padding: 16px; }
+.tsheet { width: 100%; max-width: 400px; }
+.tname { font-size: 24px; font-weight: 750; text-align: center; margin-bottom: 14px; }
+.podium { display: grid; gap: 8px; }
+.prow { display: flex; align-items: center; gap: 12px; background: var(--surface); border-radius: 14px; padding: 12px 14px; font-size: 17px; }
+.prow.win { background: linear-gradient(135deg, rgba(249,226,175,.22), rgba(250,179,135,.22)); outline: 2px solid var(--peach); font-size: 20px; font-weight: 700; }
+.prow .medal { font-size: 26px; width: 34px; text-align: center; }
+.prow .pts { margin-left: auto; font-weight: 750; font-variant-numeric: tabular-nums; }
+.prow .note { font-size: 12px; color: var(--sub); font-weight: 500; }
+@media (prefers-reduced-motion: reduce) { .cell.spot, .watch .btn { animation: none; } }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="../sfx.js"></script>
+<script src="engine.js"></script>
+<script>
+'use strict';
+const S = window.Sixes;
+const app = document.getElementById('app');
+const COLOR_NAMES = ['red', 'orange', 'yellow', 'green', 'blue', 'purple'];
+
+const store = {
+  get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  del(k) { try { localStorage.removeItem(k); } catch {} },
+  keys() { try { return Object.keys(localStorage); } catch { return []; } },
+};
+const gkey = id => 'sixes:g:' + id;
+
+let screen = 'home';
+let G = null;        // { game, me, hotseat }
+let draft = [];      // tiles being placed this turn: [{ slot, x, y }]
+let pick = null;     // selected rack slot
+let tradeMode = false, tradeSel = new Set();
+let pending = null;  // game after this turn's move, not yet sent
+let covered = false; // pass & play: hand hidden until the next player taps
+let zoom = null;     // cell px, or null = fit to width
+let centerNext = true;
+let newForm = { n: 2, names: [store.get('mosaic:name') || '', '', '', ''], hotseat: false };
+
+function saveGame() {
+  if (!G) return;
+  store.set(gkey(G.game.id), { code: S.encode(G.game), me: G.me, hotseat: G.hotseat, updated: Date.now() });
+  store.set('sixes:open', G.game.id);
+}
+function loadGame(id) {
+  const r = store.get(gkey(id));
+  if (!r) return null;
+  try { return { game: S.decode(r.code), me: r.me, hotseat: !!r.hotseat }; } catch { return null; }
+}
+function listGames() {
+  return store.keys().filter(k => k.startsWith('sixes:g:'))
+    .map(k => { const r = store.get(k); try { return { g: S.decode(r.code), me: r.me, hotseat: r.hotseat, updated: r.updated }; } catch { return null; } })
+    .filter(Boolean).sort((a, b) => b.updated - a.updated);
+}
+
+// ---- helpers ----
+const esc = s => String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+const STAR8 = Array.from({ length: 16 }, (_, i) => {
+  const a = (i * Math.PI) / 8 - Math.PI / 2, r = i % 2 ? 21 : 41;
+  return (50 + r * Math.cos(a)).toFixed(1) + ' ' + (50 + r * Math.sin(a)).toFixed(1);
+}).join(' L');
+const SHAPES = [
+  '<circle cx="50" cy="50" r="29"/>',
+  '<rect x="23" y="23" width="54" height="54" rx="5"/>',
+  '<path d="M50 11 L89 50 L50 89 L11 50Z"/>',
+  '<circle cx="50" cy="30" r="16"/><circle cx="70" cy="50" r="16"/><circle cx="50" cy="70" r="16"/><circle cx="30" cy="50" r="16"/><circle cx="50" cy="50" r="12"/>',
+  '<path d="M50 8 L61 39 L92 50 L61 61 L50 92 L39 61 L8 50 L39 39Z"/>',
+  `<path d="M${STAR8}Z"/>`,
+];
+const tileHtml = t => t == null ? '<div class="tile back"></div>'
+  : `<div class="tile"><svg viewBox="0 0 100 100" fill="var(--k${S.color(t)})">${SHAPES[S.shape(t)]}</svg></div>`;
+const baseUrl = () => location.origin + location.pathname;
+const linkFor = g => baseUrl() + '#q=' + S.encode(g);
+
+const stateCache = new WeakMap();
+function R(g) {
+  let s = stateCache.get(g);
+  if (!s) { s = S.replay(g); stateCache.set(g, s); }
+  return s;
+}
+const shown = () => view || pending || G.game;
+
+function toast(msg) {
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3200);
+}
+
+function moveText(g) {
+  const L = R(g).last;
+  if (!L) return '';
+  const who = g.names[L.p];
+  if (L.type === 'trade') return `${who} swapped ${L.k} tile${L.k > 1 ? 's' : ''}`;
+  if (L.type === 'pass') return `${who} passed — no move`;
+  let t = `${who} played ${L.tiles.length} tile${L.tiles.length > 1 ? 's' : ''} for ${L.score}`;
+  if (L.qwirkles) t += L.qwirkles > 1 ? ` — ${L.qwirkles} lines of six!` : ' — a line of six!';
+  if (L.out) t += ` and went out (+${L.out})`;
+  return t;
+}
+
+function shareText(g) {
+  const s = R(g);
+  if (s.over) {
+    const w = S.winners(s).map(i => g.names[i]).join(' & ');
+    return `Sixes · ${moveText(g)}. Game over — ${w} wins!`;
+  }
+  const head = g.moves.length ? `${moveText(g)}.` : `New game.`;
+  return `Sixes · ${head} ${g.names[s.cur]}'s turn.`;
+}
+
+// Whose hand sits in the rack.
+function viewIdx() {
+  if (G.hotseat) return R(G.game).cur;
+  return G.me ?? R(G.game).cur;
+}
+function myTurn() {
+  const s = R(G.game);
+  return !busy && !s.over && !pending && (G.hotseat ? !covered : G.me === s.cur);
+}
+
+// ---- incoming links ----
+function ingest(code) {
+  let g;
+  try { g = S.decode(code); } catch (e) { toast(e.message); return false; }
+  const prev = loadGame(g.id);
+  let seq = null;
+  stopAnim();
+  if (prev && S.seq(prev.game) > S.seq(g)) {
+    G = prev;
+    toast(`That's an older link — you already have move ${prev.game.moves.length}`);
+  } else if (prev && S.seq(prev.game) === S.seq(g)) {
+    G = prev;
+  } else {
+    // The link holds every move: replay the ones this phone hasn't seen (the last few).
+    const from = Math.max(prev ? prev.game.moves.length : 0, g.moves.length - 4);
+    const steps = [];
+    for (let k = from; k < g.moves.length; k++) steps.push({ g0: { ...g, moves: g.moves.slice(0, k) }, g1: k + 1 === g.moves.length ? g : { ...g, moves: g.moves.slice(0, k + 1) } });
+    if (steps.length) seq = { steps, C: g };
+    G = { game: g, me: prev ? prev.me : null, hotseat: prev ? prev.hotseat : false };
+  }
+  resetTurn(); pending = null; lastSeq = null; screen = 'game'; centerNext = true; covered = G.hotseat;
+  saveGame();
+  render();
+  if (G.me == null && !G.hotseat) askWho(() => offerWatch(seq));
+  else offerWatch(seq);
+  return true;
+}
+
+function extractCode(text) {
+  const m = text.match(/[#&?]q=([A-Za-z0-9_-]+)/);
+  if (m) return m[1];
+  const raw = text.trim().match(/[A-Za-z0-9_-]{20,}/);
+  return raw ? raw[0] : null;
+}
+
+// ---- actions ----
+function resetTurn() { draft = []; pick = null; tradeMode = false; tradeSel = new Set(); }
+
+function tapRack(slot) {
+  if (!myTurn()) return;
+  if (tradeMode) {
+    tradeSel.has(slot) ? tradeSel.delete(slot) : tradeSel.add(slot);
+    sfx.tock(0, 1.3, 0.4);
+    render();
+    return;
+  }
+  if (draft.some(d => d.slot === slot)) return;
+  pick = pick === slot ? null : slot;
+  render();
+  if (pick != null) { sfx.clack(0, 1.25, 0.6); buzz(5); }
+}
+
+function tapCell(x, y) {
+  if (!myTurn()) return;
+  const i = draft.findIndex(d => d.x === x && d.y === y);
+  if (i >= 0) { // take a draft tile back
+    draft.splice(i, 1);
+    pick = null;
+    render();
+    sfx.clack(0, 0.9, 0.4);
+    return;
+  }
+  if (pick == null) return;
+  const s = R(G.game);
+  if (s.board.has(S.key(x, y))) return;
+  const r = S.checkPlace(s, draft.concat({ slot: pick, x, y }));
+  if (!r.ok) { toast(r.err); return; }
+  const from = q(document, `.rack [data-slot="${pick}"]`);
+  const a = from && from.getBoundingClientRect(), t = s.hands[s.cur][pick];
+  draft.push({ slot: pick, x, y });
+  pick = null;
+  render();
+  const to = cellEl(x, y);
+  if (a && to && !RM) {
+    to.style.visibility = 'hidden';
+    fly(a, tileHtml(t), to, { dur: 300, arc: 26 }).then(() => { to.style.visibility = ''; squash(to); });
+  }
+  sfx.clack(0.25, 0.85, 1);
+  buzz(8);
+}
+
+function playDraft() {
+  if (!myTurn() || !draft.length) return;
+  const A = G.game;
+  try { pending = S.play(A, { type: 'place', tiles: draft.slice() }); } catch (e) { toast(e.message); return; }
+  resetTurn();
+  animateTurn({ steps: [{ g0: A, g1: pending }], C: pending }, true);
+}
+
+function doTrade() {
+  if (!myTurn() || !tradeSel.size) return;
+  const A = G.game;
+  try { pending = S.play(A, { type: 'trade', slots: [...tradeSel] }); } catch (e) { toast(e.message); return; }
+  resetTurn();
+  animateTurn({ steps: [{ g0: A, g1: pending }], C: pending }, true);
+}
+
+function doPass() {
+  if (!myTurn()) return;
+  const A = G.game;
+  try { pending = S.play(A, { type: 'pass' }); } catch (e) { toast(e.message); return; }
+  resetTurn();
+  animateTurn({ steps: [{ g0: A, g1: pending }], C: pending }, true);
+}
+
+function undo() {
+  const m = pending.moves[pending.moves.length - 1];
+  pending = null; lastSeq = null;
+  resetTurn();
+  if (m.type === 'place') draft = m.tiles.map(t => ({ ...t })); // back to editing
+  render();
+  sfx.whoosh();
+}
+
+function commit() {
+  G.game = pending;
+  pending = null;
+  saveGame();
+  sfx.whoosh();
+  if (!G.hotseat) share(); // inside the tap so the share sheet may open
+  if (G.hotseat) covered = !R(G.game).over;
+  render();
+  if (!G.hotseat) refillRack(G.game);
+}
+
+function share() {
+  const msg = shareText(G.game) + '\n' + linkFor(G.game);
+  if (navigator.share) navigator.share({ text: msg }).catch(e => { if (e.name !== 'AbortError') copyFallback(msg); });
+  else copyFallback(msg);
+}
+function copyFallback(msg) {
+  const done = () => toast('Link copied — paste it in the group text');
+  if (navigator.clipboard) navigator.clipboard.writeText(msg).then(done, () => showLink(msg));
+  else showLink(msg);
+}
+
+// ---- modals ----
+function modal(html) {
+  const m = document.createElement('div');
+  m.className = 'modal';
+  m.innerHTML = `<div class="sheet">${html}</div>`;
+  m.addEventListener('click', e => { if (e.target === m) m.remove(); });
+  document.body.appendChild(m);
+  return m;
+}
+
+function askWho(then) {
+  const g = G.game;
+  const m = modal(`<div class="kicker">Who's on this phone?</div>
+    <div class="stack">${g.names.map((n, i) => `<button class="btn ghost" data-i="${i}">${esc(n)}</button>`).join('')}
+    <button class="btn ghost" data-i="hot">We're all on this one phone</button></div>`);
+  m.querySelectorAll('[data-i]').forEach(b => b.onclick = () => {
+    if (b.dataset.i === 'hot') { G.hotseat = true; covered = true; }
+    else { G.me = +b.dataset.i; store.set('mosaic:name', g.names[G.me]); }
+    saveGame(); m.remove(); render();
+    if (then) then();
+  });
+}
+
+function askPaste() {
+  const m = modal(`<div class="kicker">Paste a link</div>
+    <textarea id="paste" placeholder="Paste the whole message — the link is found automatically"></textarea>
+    <div class="row" style="margin-top:12px"><button class="btn ghost grow" id="cancel">Cancel</button><button class="btn grow" id="go">Open</button></div>`);
+  m.querySelector('#cancel').onclick = () => m.remove();
+  m.querySelector('#go').onclick = () => {
+    const code = extractCode(m.querySelector('#paste').value);
+    if (!code) return toast('No game link found in that text');
+    if (ingest(code)) m.remove();
+  };
+  setTimeout(() => m.querySelector('#paste').focus(), 50);
+}
+
+function showLink(msg) {
+  const m = modal(`<div class="kicker">Copy this into the group text</div><textarea readonly>${esc(msg)}</textarea>
+    <button class="btn" style="width:100%;margin-top:12px" id="ok">Done</button>`);
+  m.querySelector('textarea').select();
+  m.querySelector('#ok').onclick = () => m.remove();
+}
+
+function showRules() {
+  const demo = ts => `<div class="demo">${ts.map(tileHtml).join('')}</div>`;
+  const m = modal(`<div class="kicker">How to play</div><div class="how" style="font-size:14px">
+    <b>Make lines.</b> Every line is one color with all different shapes, or one shape in all different colors — never the same tile twice, so six is the most a line can hold.
+    ${demo([0, 1, 2, 3])}${demo([4, 10, 16, 22])}
+    <b>Your turn:</b> place one or more tiles in a single row or column, touching the table, or swap tiles with the bag.<br>
+    <b>Score</b> the length of every line you made or added to. A line of six scores 12.<br>
+    <b>Finish:</b> once the bag is empty, the first player to use every tile gets +6 and the game ends.</div>
+    <button class="btn" style="width:100%;margin-top:14px" id="ok">Got it</button>`);
+  m.querySelector('#ok').onclick = () => m.remove();
+}
+
+// ---- animation + sound ----
+let view = null;      // game on screen while an animation runs
+let phase = null;     // { p, type } while animating
+let busy = false;     // input locked; a tap skips to the end
+let skipping = false;
+let lastSeq = null;   // { steps, C } — the last thing animated, for Replay
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const running = new Set();
+const waiters = new Set();
+const fx = document.createElement('div');
+fx.className = 'fx';
+document.body.appendChild(fx);
+const sfx = window.Sfx;
+sfx.setQuiet(() => skipping);
+const buzz = sfx.buzz;
+
+// A tap during an animation skips it (and is swallowed so it can't make a move).
+document.addEventListener('click', e => {
+  if (!busy || e.target.closest('.watch')) return;
+  e.stopPropagation();
+  e.preventDefault();
+  skipAnim();
+}, true);
+
+function wait(ms) {
+  if (skipping) return Promise.resolve();
+  return new Promise(res => {
+    const done = () => { waiters.delete(done); clearTimeout(t); res(); };
+    const t = setTimeout(done, ms);
+    waiters.add(done);
+  });
+}
+function anim(el, frames, opts) {
+  if (!el) return Promise.resolve();
+  const a = el.animate(frames, opts);
+  return new Promise(res => {
+    const done = () => { clearTimeout(t); running.delete(done); res(); };
+    // Watchdog: a page that stops painting never fires `finished`; don't let that lock input.
+    const t = setTimeout(() => { try { a.finish(); } catch {} done(); }, (opts.delay || 0) + opts.duration + 800);
+    done.anim = a;
+    running.add(done);
+    a.finished.then(done, done);
+    if (skipping) { try { a.finish(); } catch {} done(); }
+  });
+}
+function skipAnim() {
+  if (!busy || skipping) return;
+  skipping = true;
+  [...waiters].forEach(f => f());
+  running.forEach(done => { try { done.anim.finish(); } catch {} done(); });
+}
+function stopAnim() {
+  skipAnim();
+  document.querySelectorAll('.tally, .watch').forEach(e => e.remove());
+}
+
+const q = (root, s) => (root ? root.querySelector(s) : null);
+const cellEl = (x, y) => app.querySelector(`.cell[data-x="${x}"][data-y="${y}"]`);
+const chipEl = p => app.querySelector(`.pchip[data-p="${p}"]`);
+const centerRect = (el, size = 18) => {
+  const r = el.getBoundingClientRect();
+  return { left: r.left + r.width / 2 - size / 2, top: r.top + r.height / 2 - size / 2, width: size, height: size };
+};
+
+function fly(a, html, to, { delay = 0, dur = 430, arc = 36, spin = 0 } = {}) {
+  if (skipping || !to) return Promise.resolve();
+  const b = to.getBoundingClientRect();
+  const d = document.createElement('div');
+  d.className = 'flying';
+  d.innerHTML = html;
+  Object.assign(d.style, { left: a.left + 'px', top: a.top + 'px', width: a.width + 'px', height: a.height + 'px' });
+  fx.appendChild(d);
+  const dx = b.left + b.width / 2 - (a.left + a.width / 2), dy = b.top + b.height / 2 - (a.top + a.height / 2);
+  const k = b.width / a.width;
+  return anim(d, [
+    { transform: 'translate(0,0) scale(1) rotate(0deg)' },
+    { transform: `translate(${dx * 0.5}px, ${dy * 0.5 - arc}px) scale(${((1 + k) / 2) * 1.2}) rotate(${spin}deg)`, offset: 0.5 },
+    { transform: `translate(${dx}px, ${dy}px) scale(${k}) rotate(0deg)` },
+  ], { duration: dur, delay, easing: 'cubic-bezier(.45,.05,.35,1)', fill: 'both' }).then(() => d.remove());
+}
+const squash = (el, delay = 0) => anim(el, [{ transform: 'scale(1.3)' }, { transform: 'scale(.9)' }, { transform: 'none' }], { duration: 280, delay, easing: 'ease-out' });
+const glow = (el, delay = 0) => anim(el, [
+  { transform: 'none', filter: 'brightness(1)' },
+  { transform: 'scale(1.22)', filter: 'brightness(1.7) drop-shadow(0 0 6px #fab387)' },
+  { transform: 'none', filter: 'brightness(1)' },
+], { duration: 520, delay, easing: 'ease-out' });
+
+function floatText(el, text, kind = 'plus', size) {
+  if (skipping || !el) return;
+  const r = el.getBoundingClientRect();
+  const d = document.createElement('div');
+  d.className = 'float ' + kind;
+  d.textContent = text;
+  d.style.left = r.left + r.width / 2 + 'px';
+  d.style.top = r.top - 4 + 'px';
+  if (size) d.style.fontSize = size + 'px';
+  fx.appendChild(d);
+  anim(d, [
+    { transform: 'translate(-50%, 0) scale(.5)', opacity: 0 },
+    { transform: 'translate(-50%, -14px) scale(1.15)', opacity: 1, offset: 0.25 },
+    { transform: 'translate(-50%, -44px) scale(1)', opacity: 0 },
+  ], { duration: 1200, easing: 'ease-out', fill: 'both' }).then(() => d.remove());
+}
+
+function countUp(el, from, to, dur = 450) {
+  if (!el) return;
+  if (skipping || from === to) { el.textContent = to; return; }
+  const t0 = performance.now();
+  const step = t => {
+    const k = Math.min(1, (t - t0) / dur);
+    el.textContent = Math.round(from + (to - from) * (1 - Math.pow(1 - k, 3)));
+    if (k < 1 && !skipping) requestAnimationFrame(step);
+    else el.textContent = to;
+  };
+  requestAnimationFrame(step);
+  anim(el, [{ transform: 'scale(1)' }, { transform: 'scale(1.3)' }, { transform: 'scale(1)' }], { duration: 380 });
+}
+
+function banner(text) {
+  if (skipping || RM) return;
+  const d = document.createElement('div');
+  d.className = 'banner';
+  d.textContent = text;
+  fx.appendChild(d);
+  anim(d, [
+    { transform: 'translateX(-60%) skewX(-12deg)', opacity: 0 },
+    { transform: 'translateX(0) skewX(0)', opacity: 1, offset: 0.2 },
+    { transform: 'translateX(0) scale(1.04)', opacity: 1, offset: 0.75 },
+    { transform: 'translateX(60%) skewX(12deg)', opacity: 0 },
+  ], { duration: 1500, easing: 'ease-in-out', fill: 'both' }).then(() => d.remove());
+}
+
+// A rain of tiles.
+function confetti(n = 70) {
+  if (RM) return;
+  for (let i = 0; i < n; i++) {
+    const d = document.createElement('div');
+    const size = 16 + Math.random() * 16;
+    d.className = 'confetto';
+    d.innerHTML = tileHtml(i % 36);
+    Object.assign(d.style, { left: Math.random() * innerWidth + 'px', top: '-40px', width: size + 'px', height: size + 'px' });
+    fx.appendChild(d);
+    const dx = (Math.random() - 0.5) * 180, rot = (Math.random() - 0.5) * 900;
+    d.animate([{ transform: 'translate(0,0) rotate(0deg)' }, { transform: `translate(${dx}px, ${innerHeight + 90}px) rotate(${rot}deg)` }],
+      { duration: 1800 + Math.random() * 1600, delay: Math.random() * 700, easing: 'cubic-bezier(.25,.6,.5,1)', fill: 'both' })
+      .finished.then(() => d.remove()).catch(() => {});
+  }
+}
+
+// One move: tiles arrive (unless the mover just placed them), lines light up, points float.
+async function playStep(g0, g1, live) {
+  const s0 = R(g0), s1 = R(g1), L = s1.last, who = g1.names[L.p];
+  phase = { p: L.p, type: L.type };
+  view = g1;
+  centerNext = !live;
+  renderGame();
+  const chip = chipEl(L.p), sc = q(chip, '.sc');
+  if (sc) sc.textContent = s0.scores[L.p];
+  if (L.type === 'trade') {
+    banner(`${who} swapped ${L.k}`);
+    sfx.whoosh();
+    const bag = q(app, '#bag');
+    for (let i = 0; i < L.k; i++) fly(centerRect(chip, 22), tileHtml(null), bag, { delay: i * 90, arc: 30 });
+    await wait(500 + L.k * 90);
+    for (let i = 0; i < L.k; i++) fly(centerRect(bag, 16), tileHtml(null), chip, { delay: i * 90, arc: 30 }).then(() => sfx.clack(0, 1.1, 0.4));
+    await wait(700 + L.k * 90);
+    return;
+  }
+  if (L.type === 'pass') {
+    banner(`${who} passes`);
+    sfx.thud();
+    await wait(1100);
+    return;
+  }
+  const cells = L.tiles.map(t => cellEl(t.x, t.y));
+  if (!live) {
+    await wait(350);
+    cells.forEach(c => c && (c.style.visibility = 'hidden'));
+    await Promise.all(L.tiles.map((t, i) => fly(centerRect(chip, 22), tileHtml(t.t), cells[i], { delay: i * 140, dur: 420, spin: 12 }).then(() => {
+      const c = cells[i];
+      if (!c) return;
+      c.style.visibility = '';
+      squash(c);
+      sfx.clack(0, 0.85 + i * 0.05, 1);
+      buzz(8);
+    })));
+    cells.forEach(c => c && (c.style.visibility = ''));
+    await wait(250);
+  }
+  // Each scoring line sweeps, rising in pitch.
+  L.lines.forEach((line, li) => {
+    line.forEach(([x, y], j) => glow(cellEl(x, y), li * 300 + j * 55));
+    if (!skipping) setTimeout(() => sfx.chime(Math.min(line.length + 2 + li, 11), 0, 0.8), li * 300);
+  });
+  const tail = cells[cells.length - 1];
+  await wait(200);
+  floatText(tail, '+' + L.score, 'plus', 22);
+  countUp(sc, s0.scores[L.p], s0.scores[L.p] + L.score);
+  buzz(12);
+  await wait(Math.max(600, L.lines.length * 300 + 200));
+  if (L.qwirkles) {
+    banner(L.qwirkles > 1 ? 'Double six!' : 'Six!');
+    sfx.arp(4);
+    sfx.arp(7, 0.3);
+    confetti(24);
+    buzz(40);
+    await wait(1300);
+  }
+  if (L.out) {
+    floatText(chip, `+${L.out} out!`, 'bonus');
+    countUp(sc, s0.scores[L.p] + L.score, s1.scores[L.p]);
+    banner(`${who} is out!`);
+    sfx.arp(2);
+    await wait(1300);
+  }
+}
+
+// Plays moves in order; live = the mover's own move, tiles already on the table.
+async function animateTurn(seq, live) {
+  if (!seq || busy) return;
+  lastSeq = seq;
+  busy = true;
+  skipping = RM;
+  try {
+    for (let i = 0; i < seq.steps.length; i++) {
+      await playStep(seq.steps[i].g0, seq.steps[i].g1, live && i === seq.steps.length - 1);
+      await wait(200);
+    }
+  } finally {
+    fx.querySelectorAll('.flying, .float').forEach(e => e.remove());
+    view = null; phase = null; busy = false; skipping = false;
+  }
+  renderGame();
+  if (R(seq.C).over) finalTally(seq.C);
+}
+
+// After sending: the new tiles slide out of the bag into the rack.
+async function refillRack(g) {
+  const L = R(g).last;
+  const n = L && L.type === 'place' ? L.drew : L && L.type === 'trade' ? L.k : 0;
+  const slots = [...document.querySelectorAll('.rack .slot[data-slot]')];
+  const fresh = slots.slice(slots.length - n);
+  if (!n || !fresh.length || RM) return;
+  const bag = q(app, '#bag');
+  fresh.forEach(el => (el.style.visibility = 'hidden'));
+  fresh.forEach((el, i) => {
+    fly(centerRect(bag, 16), el.innerHTML, el, { delay: 250 + i * 110, arc: 50 }).then(() => { el.style.visibility = ''; squash(el); sfx.clack(0, 1.1, 0.6); });
+  });
+}
+
+// Sound needs one tap on iOS, so a fresh link asks before playing.
+function offerWatch(seq) {
+  if (!seq) return;
+  if (sfx.ready() || sfx.muted || RM) { animateTurn(seq); return; }
+  const g = seq.C, L = R(g).last;
+  const label = seq.steps.length > 1 ? `Watch the last ${seq.steps.length} moves` : `Watch ${esc(g.names[L.p])}’s move`;
+  const m = document.createElement('div');
+  m.className = 'watch';
+  m.innerHTML = `<button class="btn" id="wgo">▶ ${label}</button><button class="muted" id="wskip">Skip</button>`;
+  document.body.appendChild(m);
+  m.querySelector('#wgo').onclick = () => { sfx.unlock(); m.remove(); animateTurn(seq); };
+  m.querySelector('#wskip').onclick = () => { m.remove(); lastSeq = seq; render(); if (R(g).over) finalTally(g); };
+}
+
+// ---- game over: podium ----
+async function finalTally(g) {
+  if (busy) return;
+  busy = true;
+  skipping = RM;
+  const s = R(g), st = S.standings(s, g.names), win = S.winners(s);
+  const medal = ['🥇', '🥈', '🥉', '4'];
+  const m = document.createElement('div');
+  m.className = 'tally';
+  m.innerHTML = `<div class="tsheet"><div class="kicker"><span>Final score</span></div>
+    <div class="tname">${win.length > 1 ? 'It’s a tie!' : esc(g.names[win[0]]) + ' wins!'}</div>
+    <div class="podium">${st.map((x, k) => `<div class="prow ${win.includes(x.i) ? 'win' : ''}" data-k="${k}" style="opacity:0">
+      <span class="medal">${win.includes(x.i) ? (win.length > 1 ? '🤝' : '👑') : medal[k]}</span>
+      <span>${esc(x.name)}${s.outBy === x.i ? '<br><span class="note">went out +6</span>' : ''}</span><span class="pts">${x.score}</span></div>`).join('')}</div>
+    <button class="btn" id="tdone" style="width:100%;margin-top:18px;opacity:0">Done</button></div>`;
+  document.body.appendChild(m);
+  try {
+    anim(m, [{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
+    await wait(400);
+    for (let k = st.length - 1; k >= 0; k--) {
+      const row = q(m, `[data-k="${k}"]`);
+      row.style.opacity = '';
+      anim(row, [{ opacity: 0, transform: 'translateY(16px) scale(.95)' }, { opacity: 1, transform: 'none' }], { duration: 380, easing: 'cubic-bezier(.3,1.5,.5,1)' });
+      if (k === 0) {
+        const iWon = G.hotseat || win.includes(G.me);
+        if (iWon) { sfx.fanfare(); confetti(); } else sfx.sad();
+        buzz(60);
+      } else sfx.pop();
+      await wait(k === 0 ? 300 : 550);
+    }
+  } finally {
+    busy = false; skipping = false;
+  }
+  const done = q(m, '#tdone');
+  done.style.opacity = '';
+  done.onclick = () => m.remove();
+}
+
+// ---- rendering ----
+function render() {
+  if (screen === 'home') renderHome();
+  else if (screen === 'new') renderNew();
+  else renderGame();
+}
+
+function bar(inner) {
+  let b = document.querySelector('.bar');
+  if (!inner) { if (b) b.remove(); return; }
+  if (!b) { b = document.createElement('div'); b.className = 'bar'; document.body.appendChild(b); }
+  b.innerHTML = `<div class="in">${inner}</div>`;
+}
+
+function renderHome() {
+  const games = listGames();
+  app.innerHTML = `
+    <div class="topbar"><a class="back" href="../">‹ Mosaic</a><div></div></div>
+    <h1 style="margin-top:0">Sixes</h1>
+    <div class="muted" style="margin-bottom:18px">Lines of color and shape, by text message</div>
+    <div class="row" style="margin-bottom:16px">
+      <button class="btn grow" id="new">New game</button>
+      <button class="btn ghost grow" id="paste">Paste a link</button>
+    </div>
+    ${games.length ? `<div class="kicker">Games</div>` : ''}
+    ${games.map(x => {
+      const g = x.g, s = R(g);
+      let st;
+      if (s.over) st = `<span class="pill">Finished · ${esc(S.winners(s).map(i => g.names[i]).join(' & '))} won</span>`;
+      else if (x.hotseat || x.me === s.cur) st = `<span class="pill go">Your turn</span>`;
+      else st = `<span class="pill">${esc(g.names[s.cur])}'s turn</span>`;
+      return `<div class="card"><div class="row">
+        <button class="game-item grow" data-open="${g.id}">
+          <div class="grow"><div style="font-weight:600">${g.names.map(esc).join(' · ')}</div>
+          <div class="muted" style="font-size:13px">${s.scores.join(' – ')} · bag ${s.bag.length}</div></div>${st}
+        </button>
+        <button class="muted" data-del="${g.id}" aria-label="Remove" style="padding:6px 2px 6px 8px">✕</button></div></div>`;
+    }).join('')}
+    <div class="card how"><b>How it works.</b> Every move makes a link. Send it to the group text; whoever's next taps it and plays.
+      The link holds every move, so nobody falls behind — and an old link can't overwrite a newer one. Nothing is stored online.
+      <button style="color:var(--peach);margin-top:8px;display:block" id="rules">How to play ›</button></div>`;
+  bar(null);
+  app.querySelector('#new').onclick = () => { screen = 'new'; render(); };
+  app.querySelector('#paste').onclick = askPaste;
+  app.querySelector('#rules').onclick = showRules;
+  app.querySelectorAll('[data-open]').forEach(b => b.onclick = () => {
+    G = loadGame(+b.dataset.open); resetTurn(); pending = null; lastSeq = null; screen = 'game'; centerNext = true; covered = G.hotseat;
+    render();
+    if (G.me == null && !G.hotseat) askWho();
+  });
+  app.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+    if (confirm('Remove this game from this phone? (Others keep their copy.)')) { store.del(gkey(b.dataset.del)); render(); }
+  });
+}
+
+function renderNew() {
+  const f = newForm;
+  app.innerHTML = `
+    <div class="topbar"><button class="back" id="back">‹ Games</button><div></div></div>
+    <h1 style="margin-top:0">New game</h1>
+    <div class="card">
+      <div class="kicker">Players</div>
+      <div class="seg">${[2, 3, 4].map(n => `<button data-n="${n}" class="${f.n === n ? 'on' : ''}">${n}</button>`).join('')}</div>
+      <div class="stack" style="margin-top:12px">
+        ${Array.from({ length: f.n }, (_, i) => `<input type="text" data-name="${i}" maxlength="16" placeholder="${i === 0 ? 'You' : 'Player ' + (i + 1)}" value="${esc(f.names[i])}">`).join('')}
+      </div>
+      <div class="muted" style="font-size:13px;margin-top:8px">Turn order is top to bottom. First name is you. Whoever is dealt the best opening hand goes first.</div>
+      <label class="check"><input type="checkbox" id="hot" ${f.hotseat ? 'checked' : ''}> Everyone on this one phone (pass & play)</label>
+    </div>`;
+  bar(`<div class="acts"><button class="btn grow" id="start">Start game</button></div>`);
+  app.querySelector('#back').onclick = () => { screen = 'home'; render(); };
+  app.querySelectorAll('[data-n]').forEach(b => b.onclick = () => { f.n = +b.dataset.n; render(); });
+  app.querySelectorAll('[data-name]').forEach(inp => inp.oninput = () => { f.names[+inp.dataset.name] = inp.value; });
+  app.querySelector('#hot').onchange = e => { f.hotseat = e.target.checked; };
+  document.getElementById('start').onclick = () => {
+    const names = f.names.slice(0, f.n).map((x, i) => x.trim() || (i === 0 ? 'You' : 'Player ' + (i + 1)));
+    const r = new Uint32Array(2);
+    crypto.getRandomValues(r);
+    G = { game: S.newGame(names, r[0], r[1]), me: 0, hotseat: f.hotseat };
+    store.set('mosaic:name', names[0]);
+    resetTurn(); pending = null; lastSeq = null; screen = 'game'; centerNext = true; covered = f.hotseat;
+    saveGame(); render();
+    const s = R(G.game);
+    banner(`${names[s.cur]} starts`);
+    sfx.whoosh();
+    if (!f.hotseat && s.cur !== 0) toast(`${names[s.cur]} has the best opening hand and goes first — send them the link.`);
+  };
+}
+
+// Cells to draw: everything on the table plus a one-cell margin to build into.
+function tableHtml(s, draftTiles, spots) {
+  const occ = new Map(s.board);
+  draftTiles.forEach(d => occ.set(S.key(d.x, d.y), d.t));
+  let minX = 0, maxX = 0, minY = 0, maxY = 0, first = true;
+  for (const k of occ.keys()) {
+    const [x, y] = k.split(',').map(Number);
+    if (first) { minX = maxX = x; minY = maxY = y; first = false; }
+    minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+  }
+  minX--; maxX++; minY--; maxY++;
+  const cols = maxX - minX + 1;
+  const fit = Math.floor((Math.min(innerWidth, 480) - 32 - 28 - 20 - (cols - 1) * 2) / cols);
+  const cs = zoom || Math.max(30, Math.min(48, fit));
+  const recent = new Set();
+  const L = s.last;
+  if (L && L.type === 'place' && !draftTiles.length) L.tiles.forEach(t => recent.add(S.key(t.x, t.y)));
+  const drafted = new Set(draftTiles.map(d => S.key(d.x, d.y)));
+  let h = '';
+  for (let y = minY; y <= maxY; y++) for (let x = minX; x <= maxX; x++) {
+    const k = S.key(x, y), t = occ.get(k);
+    const cls = ['cell'];
+    if (drafted.has(k)) cls.push('draft');
+    else if (recent.has(k)) cls.push('recent');
+    if (t == null && spots.has(k)) cls.push('spot');
+    h += `<div class="${cls.join(' ')}" data-x="${x}" data-y="${y}">${t == null ? '' : tileHtml(t)}</div>`;
+  }
+  tableBox = { minX, minY, cs };
+  return `<div class="grid" style="--cs:${cs}px;grid-template-columns:repeat(${cols}, var(--cs))">${h}</div>`;
+}
+let tableBox = null;
+
+// Keep the same spot centered across re-renders (the grid grows at its edges).
+function tableCenter() {
+  const v = q(app, '.table');
+  if (!v || !tableBox) return null;
+  const step = tableBox.cs + 2, grid = q(v, '.grid');
+  return { x: tableBox.minX + (v.scrollLeft + v.clientWidth / 2 - grid.offsetLeft) / step - 0.5, y: tableBox.minY + (v.scrollTop + v.clientHeight / 2 - grid.offsetTop) / step - 0.5 };
+}
+function centerTable(c) {
+  const v = q(app, '.table');
+  if (!v || !c) return;
+  const step = tableBox.cs + 2;
+  const grid = q(v, '.grid');
+  const offX = grid.offsetLeft, offY = grid.offsetTop;
+  v.scrollLeft = offX + (c.x - tableBox.minX + 0.5) * step - v.clientWidth / 2;
+  v.scrollTop = offY + (c.y - tableBox.minY + 0.5) * step - v.clientHeight / 2;
+}
+function focusPoint(s) {
+  const pts = draft.length ? draft : s.last && s.last.type === 'place' ? s.last.tiles : [...s.board.keys()].map(k => { const [x, y] = k.split(',').map(Number); return { x, y }; });
+  if (!pts.length) return { x: 0, y: 0 };
+  return { x: pts.reduce((a, p) => a + p.x, 0) / pts.length, y: pts.reduce((a, p) => a + p.y, 0) / pts.length };
+}
+
+function chipsHtml(g, s) {
+  return `<div class="chips" style="grid-template-columns:repeat(${s.n},1fr)">${g.names.map((n, i) => `
+    <div class="pchip ${!s.over && i === s.cur ? 'on' : ''}" data-p="${i}">
+      <div class="nm">${i === G.me && !G.hotseat ? 'You' : esc(n)}</div><span class="sc">${s.scores[i]}</span>
+      <div class="hand">${s.hands[i].map(() => '<i></i>').join('')}</div></div>`).join('')}</div>`;
+}
+
+function statusHtml(g, s) {
+  let big, sub = moveText(g);
+  if (phase) {
+    const who = phase.p === G.me && !G.hotseat ? 'You' : esc(g.names[phase.p]);
+    big = phase.type === 'place' ? `${who} ${who === 'You' ? 'play' : 'plays'}…` : phase.type === 'trade' ? `${who} ${who === 'You' ? 'swap' : 'swaps'}…` : `${who} ${who === 'You' ? 'pass' : 'passes'}`;
+  } else if (s.over) {
+    const w = S.winners(s).map(i => g.names[i]);
+    big = `🏆 ${esc(w.join(' & '))} ${w.length > 1 ? 'tie' : 'wins'}`;
+  } else if (pending) big = 'Check your move';
+  else if (G.hotseat) big = `${esc(g.names[s.cur])}'s turn`;
+  else if (G.me === s.cur) big = 'Your turn';
+  else big = `Waiting for ${esc(g.names[s.cur])}`;
+  let btn = '';
+  if (!busy && lastSeq && lastSeq.C === (pending || G.game)) btn = '<button class="replay" id="replay">↻ Replay</button>';
+  else if (!busy && s.over) btn = '<button class="replay" id="tallybtn">🏆 Results</button>';
+  return `<div class="card status">${btn}<div class="big">${big}</div>${sub ? `<div class="last">${pending && !busy && !G.hotseat ? 'You: ' : ''}${esc(sub)}</div>` : ''}</div>`;
+}
+
+function rackHtml(s, vi, interactive) {
+  const hand = s.hands[vi] || [];
+  let hidden = 0;
+  // New tiles stay face-down until the move is sent (so Undo can't peek at the bag).
+  if (pending) { const L = s.last; hidden = L.type === 'place' ? L.drew : L.type === 'trade' ? L.k : 0; }
+  const used = new Set(draft.map(d => d.slot));
+  let h = '';
+  for (let i = 0; i < 6; i++) {
+    if (i >= hand.length - hidden || used.has(i)) { h += '<div class="slot empty"></div>'; continue; }
+    const cls = ['slot'];
+    if (pick === i) cls.push('on');
+    if (tradeMode && tradeSel.has(i)) cls.push('mark');
+    h += covered ? `<div class="slot">${tileHtml(null)}</div>`
+      : `<button class="${cls.join(' ')}" data-slot="${i}" ${interactive ? '' : 'tabindex="-1"'}>${tileHtml(hand[i])}</button>`;
+  }
+  return `<div class="rack">${h}</div>`;
+}
+
+function renderGame() {
+  const g = shown(), s = R(g), base = R(G.game);
+  const vi = viewIdx();
+  const interactive = myTurn();
+  const keep = centerNext ? null : tableCenter();
+  // Spots: where the picked tile may go.
+  let spots = new Set();
+  if (interactive && pick != null) {
+    for (const [x, y] of S.frontier(base, draft)) {
+      if (S.checkPlace(base, draft.concat({ slot: pick, x, y })).ok) spots.add(S.key(x, y));
+    }
+  }
+  const draftTiles = !view && !pending ? draft.map(d => ({ ...d, t: base.hands[base.cur][d.slot] })) : [];
+  app.innerHTML = `
+    <div class="topbar"><button class="back" id="back">‹ Games</button>
+      <span class="row" style="gap:14px"><span class="bagct" id="bag">${tileHtml(null)}${s.bag.length}</span>
+      <button id="mute" aria-label="Sound" style="font-size:17px">${sfx.muted ? '🔇' : '🔊'}</button>
+      <button id="rules" class="muted" aria-label="Rules" style="font-size:15px">?</button></span></div>
+    ${statusHtml(g, s)}
+    ${chipsHtml(g, s)}
+    <div class="card" style="padding:10px">
+      <div class="kicker" style="padding:0 4px"><span>Table · ${s.board.size} tiles</span>
+        <span class="zoom"><button id="zout">−</button><button id="zfit">⤢</button><button id="zin">+</button></span></div>
+      <div class="table">${tableHtml(s, draftTiles, spots)}</div></div>`;
+  centerTable(keep || focusPoint(s));
+  centerNext = false;
+
+  const rack = rackHtml(s, vi, interactive);
+  let b;
+  if (busy) {
+    b = `${rack}<div class="acts"><div class="grow muted" style="text-align:center">Tap anywhere to skip</div></div>`;
+  } else if (covered && !base.over) {
+    b = `${rack}<div class="acts"><button class="btn grow" id="uncover">Show ${esc(G.game.names[base.cur])}'s tiles</button></div>`;
+  } else if (pending) {
+    b = `${rack}<div class="acts"><button class="btn ghost" id="undo">Undo</button><button class="btn grow" id="send">${G.hotseat ? 'Done — next player' : 'Send move'}</button></div>`;
+  } else if (base.over) {
+    b = `<div class="acts"><button class="btn ghost grow" id="sharelink">Share result</button><button class="btn grow" id="again">Rematch</button></div>`;
+  } else if (interactive && tradeMode) {
+    const ok = tradeSel.size && S.canTrade(base, tradeSel.size);
+    b = `<div class="hint">Tap tiles to swap with the bag (${base.bag.length} left)</div>${rack}
+      <div class="acts"><button class="btn ghost" id="tcancel">Cancel</button><button class="btn grow" id="tgo" ${ok ? '' : 'disabled'}>Swap ${tradeSel.size || ''}</button></div>`;
+  } else if (interactive) {
+    let hint = pick != null ? 'Tap a glowing spot' : draft.length ? '' : 'Pick a tile, then a spot on the table';
+    let cls = '', can = false;
+    if (draft.length) {
+      const r = S.checkPlace(base, draft);
+      can = r.ok;
+      if (r.ok) hint = `${draft.length} tile${draft.length > 1 ? 's' : ''} · <b>+${r.score}</b>${r.qwirkles ? ' · six!' : ''}`;
+      else { hint = esc(r.err); cls = 'bad'; }
+    }
+    const side = draft.length ? '<button class="btn ghost" id="clear">Clear</button>'
+      : S.canPass(base) ? '<button class="btn ghost" id="pass">Pass</button>'
+      : `<button class="btn ghost" id="trade" ${S.canTrade(base) ? '' : 'disabled'}>Swap</button>`;
+    b = `<div class="hint ${cls}">${hint}</div>${rack}<div class="acts">${side}<button class="btn grow" id="play" ${can ? '' : 'disabled'}>Play</button></div>`;
+  } else if (!G.game.moves.length && G.me !== base.cur) {
+    b = `${rack}<div class="acts"><div class="grow muted">${esc(G.game.names[base.cur])} goes first</div><button class="btn small" id="sharelink">Send link</button></div>`;
+  } else if (base.last && base.last.p === G.me) {
+    b = `${rack}<div class="acts"><div class="grow muted">Sent? If not:</div><button class="btn small" id="sharelink">Send link again</button></div>`;
+  } else {
+    b = `${rack}<div class="acts"><div class="grow muted">Tap ${esc(G.game.names[base.cur])}'s link when it arrives</div><button class="btn ghost small" id="paste">Paste</button></div>`;
+  }
+  bar(b);
+
+  app.querySelector('#back').onclick = () => { screen = 'home'; resetTurn(); pending = null; lastSeq = null; render(); };
+  app.querySelectorAll('.cell').forEach(el => el.onclick = () => tapCell(+el.dataset.x, +el.dataset.y));
+  document.querySelectorAll('.rack [data-slot]').forEach(el => el.onclick = () => tapRack(+el.dataset.slot));
+  const on = (id, fn) => { const el = document.getElementById(id); if (el) el.onclick = fn; };
+  on('mute', () => { sfx.toggle(); render(); });
+  on('rules', showRules);
+  on('zin', () => { zoom = Math.min(64, (zoom || tableBox.cs) + 8); render(); });
+  on('zout', () => { zoom = Math.max(20, (zoom || tableBox.cs) - 8); render(); });
+  on('zfit', () => { zoom = null; centerNext = true; render(); });
+  on('replay', () => animateTurn(lastSeq));
+  on('tallybtn', () => finalTally(G.game));
+  on('uncover', () => {
+    covered = false;
+    render();
+    document.querySelectorAll('.rack .slot[data-slot]').forEach((el, i) =>
+      anim(el, [{ transform: 'rotateY(90deg) scale(.8)' }, { transform: 'none' }], { duration: 300, delay: i * 60, easing: 'ease-out', fill: 'backwards' }));
+    sfx.pick(6);
+  });
+  on('undo', undo);
+  on('send', commit);
+  on('play', playDraft);
+  on('clear', () => { resetTurn(); render(); sfx.whoosh(); });
+  on('trade', () => { tradeMode = true; pick = null; render(); });
+  on('tcancel', () => { tradeMode = false; tradeSel = new Set(); render(); });
+  on('tgo', doTrade);
+  on('pass', doPass);
+  on('sharelink', share);
+  on('paste', askPaste);
+  on('again', () => { newForm.names = G.game.names.slice(); newForm.n = G.game.names.length; newForm.hotseat = G.hotseat; screen = 'new'; render(); });
+}
+
+// ---- boot ----
+function boot() {
+  const code = extractCode(location.hash);
+  if (code) {
+    history.replaceState(null, '', location.pathname);
+    if (ingest(code)) return;
+  }
+  let reload = false;
+  try { reload = !!sessionStorage.getItem('sixes:seen'); sessionStorage.setItem('sixes:seen', '1'); } catch {}
+  const open = store.get('sixes:open');
+  if (open != null && reload) {
+    G = loadGame(open);
+    if (G) { screen = 'game'; covered = G.hotseat; render(); return; }
+  }
+  screen = 'home';
+  render();
+}
+window.addEventListener('hashchange', () => { const c = extractCode(location.hash); if (c) { history.replaceState(null, '', location.pathname); ingest(c); } });
+addEventListener('resize', () => { if (screen === 'game' && !busy) render(); });
+boot();
+</script>
+</body>
+</html>
