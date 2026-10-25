@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1e1e2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta property="og:title" content="Mosaic — your move">
+<meta property="og:description" content="Tap to open the game">
+<title>Mosaic</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.json">
+<style>
+:root {
+  --bg: #1e1e2e; --mantle: #181825; --crust: #11111b;
+  --surface: #313244; --surface2: #45475a; --overlay: #6c7086;
+  --text: #cdd6f4; --sub: #a6adc8; --peach: #fab387; --green: #a6e3a1; --red: #f38ba8;
+  --c0: #2f6fd6; --c1: #f2c230; --c2: #e04b3a; --c3: #24252f; --c4: #cfe9f0;
+  --cell: min(32px, calc((min(100vw, 480px) - 112px) / 10));
+  --ftile: 28px;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body { font: 15px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, system-ui, sans-serif; overscroll-behavior: none; }
+button { font: inherit; color: inherit; border: 0; background: none; padding: 0; cursor: pointer; touch-action: manipulation; }
+#app { max-width: 480px; margin: 0 auto; padding: max(12px, env(safe-area-inset-top)) 16px calc(96px + env(safe-area-inset-bottom)); }
+
+.card { background: var(--surface); border-radius: 16px; padding: 14px; margin-bottom: 12px; }
+.kicker { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--sub); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+.btn { background: var(--peach); color: var(--crust); font-weight: 650; border-radius: 12px; padding: 12px 16px; }
+.btn.ghost { background: var(--surface2); color: var(--text); }
+.btn.small { padding: 7px 12px; font-size: 13px; border-radius: 10px; }
+.row { display: flex; gap: 10px; align-items: center; }
+.grow { flex: 1; }
+.muted { color: var(--sub); }
+
+/* tiles */
+.t { width: var(--ftile); height: var(--ftile); border-radius: 6px; position: relative; flex: none;
+     box-shadow: inset 0 -2px 0 rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.25); }
+.t::after { content: ""; position: absolute; inset: 30%; border-radius: 2px; opacity: .55; }
+.t0 { background: var(--c0); } .t0::after { background: #9cc0ff; transform: rotate(45deg); }
+.t1 { background: var(--c1); } .t1::after { background: #c0392b; border-radius: 50%; }
+.t2 { background: var(--c2); } .t2::after { background: #ffd2a0; inset: 34%; transform: rotate(45deg); }
+.t3 { background: var(--c3); box-shadow: inset 0 0 0 1px #585b70, inset 0 -2px 0 rgba(0,0,0,.4); } .t3::after { background: #cdd6f4; inset: 36%; border-radius: 50%; }
+.t4 { background: var(--c4); } .t4::after { background: #4a90a8; inset: 28%; clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); opacity: .7; border-radius: 0; }
+.tm { background: #f5f5f5; color: #1e1e2e; font-weight: 800; display: grid; place-items: center; font-size: 15px; }
+.tm::after { display: none; }
+
+/* factories */
+.factories { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; justify-items: center; }
+.factory { width: 76px; height: 76px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #585b70, #3a3b4f 70%);
+           display: grid; grid-template-columns: repeat(2, var(--ftile)); gap: 4px; place-content: center; position: relative; }
+.factory.empty { opacity: .3; }
+.factory .num { position: absolute; top: -4px; left: -2px; font-size: 10px; color: var(--sub); }
+.center { margin-top: 12px; background: var(--mantle); border-radius: 14px; padding: 10px; min-height: 52px; display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.center .label { width: 100%; font-size: 11px; color: var(--sub); letter-spacing: .08em; text-transform: uppercase; }
+.pick { transition: transform .12s, opacity .12s; }
+.pick.on { transform: translateY(-3px); outline: 2px solid var(--peach); outline-offset: 2px; }
+.pick.dim { opacity: .35; }
+
+/* boards */
+.board .bhead { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.board .bname { font-weight: 650; font-size: 16px; }
+.score { font-size: 28px; font-weight: 750; font-variant-numeric: tabular-nums; }
+.brow { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; border-radius: 8px; padding: 2px; }
+.brow.can { background: rgba(250,179,135,.18); outline: 2px solid var(--peach); cursor: pointer; }
+.cells { display: flex; gap: 3px; }
+.slot { width: var(--cell); height: var(--cell); border-radius: 6px; flex: none; }
+.slot.line { background: var(--mantle); box-shadow: inset 0 0 0 1px #45475a; }
+.slot.blank { background: none; }
+.slot.t { width: var(--cell); height: var(--cell); }
+.faint { opacity: .16; box-shadow: none; }
+.t3.faint { opacity: .45; }
+.faint::after { opacity: .9; }
+.arrow { color: var(--overlay); font-size: 12px; width: 8px; text-align: center; }
+.floor { margin-top: 10px; display: flex; gap: 3px; padding: 4px; border-radius: 8px; }
+.floor.can { background: rgba(250,179,135,.18); outline: 2px solid var(--peach); cursor: pointer; }
+.fslot { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.fslot .pen { font-size: 10px; color: var(--red); }
+.fslot .slot.line { background: #2a1f2a; }
+
+/* opponents */
+.opps { display: grid; gap: 8px; margin-bottom: 12px; }
+.mini { background: var(--surface); border-radius: 12px; padding: 8px; border: 2px solid transparent; }
+.mini.active { border-color: var(--peach); }
+.mini .mhead { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; gap: 4px; }
+.mini .mhead span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini .mrow { display: flex; gap: 2px; margin-bottom: 2px; justify-content: center; }
+.mini .ms { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+.mini .ms.line { background: var(--mantle); }
+.mini .ms.blank { background: none; }
+.mini .ms.t::after { display: none; }
+.mini .ms.gap { width: 3px; }
+.mini .mfloor { display: flex; gap: 2px; margin-top: 4px; justify-content: center; min-height: 9px; }
+.mini .ms.tm { font-size: 0; }
+
+/* status + bars */
+.status .big { font-size: 20px; font-weight: 700; }
+.status .last { color: var(--sub); margin-top: 4px; }
+.summary { margin-top: 10px; display: grid; gap: 4px; font-size: 14px; }
+.summary div { display: flex; justify-content: space-between; }
+.pill { font-size: 12px; padding: 3px 8px; border-radius: 999px; background: var(--surface2); }
+.pill.go { background: var(--peach); color: var(--crust); font-weight: 650; }
+.bar { position: fixed; left: 0; right: 0; bottom: 0; background: rgba(24,24,37,.96); backdrop-filter: blur(10px);
+       border-top: 1px solid var(--surface); padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); }
+.bar .in { max-width: 448px; margin: 0 auto; display: flex; gap: 10px; align-items: center; min-height: 44px; }
+.topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.back { color: var(--peach); font-size: 15px; }
+
+/* home + forms */
+h1 { font-size: 34px; margin: 18px 0 2px; letter-spacing: -.02em; }
+.game-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; }
+.game-item .names { font-weight: 600; }
+.seg { display: flex; background: var(--mantle); border-radius: 10px; padding: 3px; }
+.seg button { flex: 1; padding: 8px; border-radius: 8px; color: var(--sub); }
+.seg button.on { background: var(--surface2); color: var(--text); font-weight: 650; }
+input[type=text], textarea { width: 100%; background: var(--mantle); color: var(--text); border: 1px solid var(--surface2); border-radius: 10px; padding: 11px 12px; font: inherit; font-size: 16px; }
+textarea { min-height: 110px; resize: vertical; }
+label.check { display: flex; gap: 10px; align-items: center; margin-top: 12px; }
+.stack { display: grid; gap: 8px; }
+.modal { position: fixed; inset: 0; background: rgba(17,17,27,.75); display: grid; place-items: end center; z-index: 10; }
+.modal .sheet { background: var(--surface); width: 100%; max-width: 480px; border-radius: 20px 20px 0 0; padding: 20px 16px calc(20px + env(safe-area-inset-bottom)); }
+.toast { position: fixed; left: 50%; top: max(16px, env(safe-area-inset-top)); transform: translateX(-50%); background: var(--crust); color: var(--text);
+         padding: 10px 14px; border-radius: 12px; z-index: 20; box-shadow: 0 6px 24px rgba(0,0,0,.4); max-width: 90vw; font-size: 14px; }
+.how { font-size: 13px; color: var(--sub); }
+.how b { color: var(--text); }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="engine.js"></script>
+<script>
+'use strict';
+const M = window.Mosaic;
+const COLOR_NAMES = ['blue', 'yellow', 'red', 'black', 'ice'];
+const app = document.getElementById('app');
+
+// ---- storage (per-device only; the link is the real source of truth) ----
+const store = {
+  get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  del(k) { try { localStorage.removeItem(k); } catch {} },
+  keys() { try { return Object.keys(localStorage); } catch { return []; } },
+};
+const gkey = id => 'mosaic:g:' + id;
+
+let screen = 'home';
+let G = null;        // { state, me, hotseat }
+let sel = null;      // { src, c }
+let pending = null;  // state after this turn's move, before it's sent
+let newForm = { n: 3, names: [store.get('mosaic:name') || '', '', '', ''], hotseat: false };
+
+function saveGame() {
+  if (!G) return;
+  store.set(gkey(G.state.id), { code: M.encode(G.state), me: G.me, hotseat: G.hotseat, updated: Date.now() });
+  store.set('mosaic:open', G.state.id);
+}
+function loadGame(id) {
+  const r = store.get(gkey(id));
+  if (!r) return null;
+  try { return { state: M.decode(r.code), me: r.me, hotseat: !!r.hotseat }; } catch { return null; }
+}
+function listGames() {
+  return store.keys().filter(k => k.startsWith('mosaic:g:'))
+    .map(k => { const r = store.get(k); try { return { s: M.decode(r.code), me: r.me, hotseat: r.hotseat, updated: r.updated }; } catch { return null; } })
+    .filter(Boolean).sort((a, b) => b.updated - a.updated);
+}
+
+// ---- helpers ----
+const esc = s => String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+const tile = (c, cls = '') => `<div class="t ${c === M.MARKER ? 'tm' : 't' + c} ${cls}">${c === M.MARKER ? '1' : ''}</div>`;
+const baseUrl = () => location.origin + location.pathname;
+const linkFor = s => baseUrl() + '#g=' + M.encode(s);
+
+function toast(msg) {
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3200);
+}
+
+function moveText(s) {
+  const L = s.last;
+  if (!L) return '';
+  const who = s.names[L.p];
+  const from = L.src === M.SRC_CENTER ? 'the center' : 'factory ' + (L.src + 1);
+  const to = L.dst === M.DST_FLOOR ? 'the floor' : 'row ' + (L.dst + 1);
+  let t = `${who} took ${L.k} ${COLOR_NAMES[L.c]} from ${from} → ${to}`;
+  if (L.dst !== M.DST_FLOOR && L.toFloor) t += ` (${L.toFloor} to floor)`;
+  if (L.marker) t += ' + first-player tile';
+  return t;
+}
+
+function shareText(s) {
+  const head = `Mosaic · move ${s.turn}: ${moveText(s)}.`;
+  if (s.over) {
+    const w = M.winners(s).map(i => s.names[i]).join(' & ');
+    return `${head} Game over — ${w} wins!`;
+  }
+  return `${head} ${s.names[s.cur]}'s turn.`;
+}
+
+// Whose board sits big at the bottom.
+function viewIdx() {
+  if (G.hotseat) return G.state.cur;
+  return G.me ?? G.state.cur;
+}
+function myTurn() {
+  const s = G.state;
+  return !s.over && !pending && (G.hotseat || G.me === s.cur);
+}
+
+// ---- incoming links / codes ----
+function ingest(code) {
+  let s;
+  try { s = M.decode(code); } catch (e) { toast(e.message); return false; }
+  const prev = loadGame(s.id);
+  if (prev && prev.state.turn > s.turn) {
+    G = prev;
+    toast(`That's an older link — you already have move ${prev.state.turn}`);
+  } else if (prev && prev.state.turn === s.turn) {
+    G = prev;
+  } else {
+    G = { state: s, me: prev ? prev.me : null, hotseat: prev ? prev.hotseat : false };
+  }
+  sel = null; pending = null; screen = 'game';
+  saveGame();
+  render();
+  if (G.me == null && !G.hotseat) askWho();
+  return true;
+}
+
+function extractCode(text) {
+  const m = text.match(/[#&?]g=([A-Za-z0-9_-]+)/);
+  if (m) return m[1];
+  const raw = text.trim().match(/[A-Za-z0-9_-]{40,}/);
+  return raw ? raw[0] : null;
+}
+
+// ---- actions ----
+function pickTile(src, c) {
+  if (!myTurn()) {
+    if (!G.state.over && !pending) toast(`It's ${G.state.names[G.state.cur]}'s turn`);
+    return;
+  }
+  sel = sel && sel.src === src && sel.c === c ? null : { src, c };
+  render();
+}
+
+function placeRow(row) {
+  if (!sel) return;
+  const p = G.state.players[G.state.cur];
+  if (row !== M.DST_FLOOR && !M.canPlace(p, row, sel.c)) return;
+  pending = M.applyMove(G.state, { src: sel.src, c: sel.c, dst: row });
+  sel = null;
+  render();
+}
+
+function undo() { pending = null; render(); }
+
+function commit() {
+  G.state = pending;
+  pending = null;
+  saveGame();
+  if (!G.hotseat) share(); // must run inside the tap for the share sheet to open
+  render();
+}
+
+function share() {
+  const s = G.state;
+  const msg = shareText(s) + '\n' + linkFor(s);
+  if (navigator.share) {
+    navigator.share({ text: msg }).catch(e => { if (e.name !== 'AbortError') copyFallback(msg); });
+  } else copyFallback(msg);
+}
+
+function copyFallback(msg) {
+  const done = () => toast('Link copied — paste it in the group text');
+  if (navigator.clipboard) navigator.clipboard.writeText(msg).then(done, () => showLink(msg));
+  else showLink(msg);
+}
+
+// ---- modals ----
+function modal(html) {
+  const m = document.createElement('div');
+  m.className = 'modal';
+  m.innerHTML = `<div class="sheet">${html}</div>`;
+  m.addEventListener('click', e => { if (e.target === m) m.remove(); });
+  document.body.appendChild(m);
+  return m;
+}
+
+function askWho() {
+  const s = G.state;
+  const m = modal(`<div class="kicker">Who's on this phone?</div>
+    <div class="stack">${s.names.map((n, i) => `<button class="btn ghost" data-i="${i}">${esc(n)}</button>`).join('')}
+    <button class="btn ghost" data-i="hot">We're all on this one phone</button></div>`);
+  m.querySelectorAll('[data-i]').forEach(b => b.onclick = () => {
+    if (b.dataset.i === 'hot') G.hotseat = true;
+    else { G.me = +b.dataset.i; store.set('mosaic:name', s.names[G.me]); }
+    saveGame(); m.remove(); render();
+  });
+}
+
+function askPaste() {
+  const m = modal(`<div class="kicker">Paste a link or code</div>
+    <textarea id="paste" placeholder="Paste the whole message — the link is found automatically"></textarea>
+    <div class="row" style="margin-top:12px"><button class="btn ghost grow" id="cancel">Cancel</button><button class="btn grow" id="go">Open</button></div>`);
+  m.querySelector('#cancel').onclick = () => m.remove();
+  m.querySelector('#go').onclick = () => {
+    const code = extractCode(m.querySelector('#paste').value);
+    if (!code) return toast('No game code found in that text');
+    if (ingest(code)) m.remove();
+  };
+  setTimeout(() => m.querySelector('#paste').focus(), 50);
+}
+
+function showLink(msg) {
+  const m = modal(`<div class="kicker">Copy this into the group text</div><textarea readonly>${esc(msg)}</textarea>
+    <button class="btn" style="width:100%;margin-top:12px" id="ok">Done</button>`);
+  m.querySelector('textarea').select();
+  m.querySelector('#ok').onclick = () => m.remove();
+}
+
+// ---- rendering ----
+function render() {
+  if (screen === 'home') renderHome();
+  else if (screen === 'new') renderNew();
+  else renderGame();
+}
+
+function bar(inner) {
+  let b = document.querySelector('.bar');
+  if (!inner) { if (b) b.remove(); return; }
+  if (!b) { b = document.createElement('div'); b.className = 'bar'; document.body.appendChild(b); }
+  b.innerHTML = `<div class="in">${inner}</div>`;
+}
+
+function renderHome() {
+  const games = listGames();
+  app.innerHTML = `
+    <h1>Mosaic</h1>
+    <div class="muted" style="margin-bottom:18px">Azul by text message</div>
+    <div class="row" style="margin-bottom:16px">
+      <button class="btn grow" id="new">New game</button>
+      <button class="btn ghost grow" id="paste">Paste a link</button>
+    </div>
+    ${games.length ? `<div class="kicker">Games</div>` : ''}
+    ${games.map(g => {
+      const s = g.s;
+      let st;
+      if (s.over) st = `<span class="pill">Finished · ${esc(M.winners(s).map(i => s.names[i]).join(' & '))} won</span>`;
+      else if (g.hotseat || g.me === s.cur) st = `<span class="pill go">Your turn</span>`;
+      else st = `<span class="pill">${esc(s.names[s.cur])}'s turn</span>`;
+      return `<div class="card"><div class="row">
+        <button class="game-item grow" data-open="${s.id}">
+          <div class="grow"><div class="names">${s.names.map(esc).join(' · ')}</div>
+          <div class="muted" style="font-size:13px">Round ${s.round} · move ${s.turn}</div></div>${st}
+        </button>
+        <button class="muted" data-del="${s.id}" aria-label="Remove" style="padding:6px 2px 6px 8px">✕</button></div></div>`;
+    }).join('')}
+    <div class="card how">
+      <b>How it works.</b> Every move makes a link. Send it to the group text; whoever's next taps it and plays.
+      The link carries the whole game, so nobody falls behind — and an old link can't overwrite a newer one.
+      Nothing is stored online.
+    </div>`;
+  bar(null);
+  app.querySelector('#new').onclick = () => { screen = 'new'; render(); };
+  app.querySelector('#paste').onclick = askPaste;
+  app.querySelectorAll('[data-open]').forEach(b => b.onclick = () => {
+    G = loadGame(+b.dataset.open); sel = null; pending = null; screen = 'game'; render();
+    if (G.me == null && !G.hotseat) askWho();
+  });
+  app.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+    if (confirm('Remove this game from this phone? (Others keep their copy.)')) { store.del(gkey(b.dataset.del)); render(); }
+  });
+}
+
+function renderNew() {
+  const f = newForm;
+  app.innerHTML = `
+    <div class="topbar"><button class="back" id="back">‹ Games</button><div></div></div>
+    <h1 style="margin-top:0">New game</h1>
+    <div class="card">
+      <div class="kicker">Players</div>
+      <div class="seg">${[2, 3, 4].map(n => `<button data-n="${n}" class="${f.n === n ? 'on' : ''}">${n}</button>`).join('')}</div>
+      <div class="stack" style="margin-top:12px">
+        ${Array.from({ length: f.n }, (_, i) => `<input type="text" data-name="${i}" maxlength="16" placeholder="${i === 0 ? 'You' : 'Player ' + (i + 1)}" value="${esc(f.names[i])}">`).join('')}
+      </div>
+      <div class="muted" style="font-size:13px;margin-top:8px">Turn order is top to bottom. First name is you.</div>
+      <label class="check"><input type="checkbox" id="hot" ${f.hotseat ? 'checked' : ''}> Everyone on this one phone (pass & play)</label>
+    </div>`;
+  bar(`<button class="btn grow" id="start">Start game</button>`);
+  app.querySelector('#back').onclick = () => { screen = 'home'; render(); };
+  app.querySelectorAll('[data-n]').forEach(b => b.onclick = () => { f.n = +b.dataset.n; render(); });
+  app.querySelectorAll('[data-name]').forEach(inp => inp.oninput = () => { f.names[+inp.dataset.name] = inp.value; });
+  app.querySelector('#hot').onchange = e => { f.hotseat = e.target.checked; };
+  document.getElementById('start').onclick = () => {
+    const names = f.names.slice(0, f.n).map((x, i) => x.trim() || (i === 0 ? 'You' : 'Player ' + (i + 1)));
+    const r = new Uint32Array(2);
+    crypto.getRandomValues(r);
+    G = { state: M.newGame(names, r[0], r[1]), me: 0, hotseat: f.hotseat };
+    store.set('mosaic:name', names[0]);
+    sel = null; pending = null; screen = 'game';
+    saveGame(); render();
+  };
+}
+
+function lineCells(L, r, big) {
+  let h = '';
+  for (let j = 0; j < 5; j++) {
+    if (j < 4 - r) { h += `<div class="${big ? 'slot' : 'ms'} blank"></div>`; continue; }
+    const k = 4 - j; // distance from the wall; lines fill toward it
+    h += k < L.n ? tile(L.c, big ? 'slot' : 'ms') : `<div class="${big ? 'slot' : 'ms'} line"></div>`;
+  }
+  return h;
+}
+
+function wallCells(p, r, big) {
+  let h = '';
+  for (let c = 0; c < 5; c++) {
+    const col = M.wallColor(r, c);
+    h += tile(col, (big ? 'slot ' : 'ms ') + (p.wall[r * 5 + c] ? '' : 'faint'));
+  }
+  return h;
+}
+
+function miniBoard(s, i) {
+  const p = s.players[i];
+  let rows = '';
+  for (let r = 0; r < 5; r++) rows += `<div class="mrow">${lineCells(p.lines[r], r, false)}<div class="ms gap"></div>${wallCells(p, r, false)}</div>`;
+  return `<div class="mini ${!s.over && i === s.cur ? 'active' : ''}">
+    <div class="mhead"><span>${esc(s.names[i])}</span><b>${p.score}</b></div>${rows}
+    <div class="mfloor">${p.floor.map(t => tile(t, 'ms')).join('')}</div></div>`;
+}
+
+function bigBoard(s, i, canSel) {
+  const p = s.players[i];
+  let rows = '';
+  for (let r = 0; r < 5; r++) {
+    const can = canSel && M.canPlace(p, r, sel.c);
+    rows += `<div class="brow ${can ? 'can' : ''}" ${can ? `data-row="${r}"` : ''}>
+      <div class="cells">${lineCells(p.lines[r], r, true)}</div><div class="arrow">›</div><div class="cells">${wallCells(p, r, true)}</div></div>`;
+  }
+  let floor = '';
+  for (let k = 0; k < 7; k++) {
+    const t = p.floor[k];
+    floor += `<div class="fslot">${t === undefined ? '<div class="slot line"></div>' : tile(t, 'slot')}<div class="pen">${M.FLOOR_PEN[k]}</div></div>`;
+  }
+  const label = G.hotseat || G.me === i ? (G.hotseat ? esc(s.names[i]) : 'You') : esc(s.names[i]);
+  return `<div class="card board">
+    <div class="bhead"><div class="bname">${label}</div><div class="score">${p.score}</div></div>
+    ${rows}
+    <div class="floor ${canSel ? 'can' : ''}" ${canSel ? `data-row="${M.DST_FLOOR}"` : ''}>${floor}</div></div>`;
+}
+
+function factoriesHtml(s, interactive) {
+  const fx = s.factories.map((f, i) => {
+    const tiles = [];
+    f.forEach((n, c) => { for (let k = 0; k < n; k++) tiles.push(c); });
+    const inner = tiles.map(c => {
+      const on = sel && sel.src === i && sel.c === c, dim = sel && sel.src === i && sel.c !== c;
+      return `<button class="t t${c} pick ${on ? 'on' : ''} ${dim ? 'dim' : ''}" ${interactive ? `data-src="${i}" data-c="${c}"` : ''} aria-label="${COLOR_NAMES[c]}"></button>`;
+    }).join('');
+    return `<div class="factory ${tiles.length ? '' : 'empty'}"><span class="num">${i + 1}</span>${inner}</div>`;
+  }).join('');
+  const ctiles = [];
+  s.center.forEach((n, c) => { for (let k = 0; k < n; k++) ctiles.push(c); });
+  const cinner = (s.centerMarker ? tile(M.MARKER) : '') + ctiles.map(c => {
+    const on = sel && sel.src === M.SRC_CENTER && sel.c === c, dim = sel && sel.src === M.SRC_CENTER && sel.c !== c;
+    return `<button class="t t${c} pick ${on ? 'on' : ''} ${dim ? 'dim' : ''}" ${interactive ? `data-src="${M.SRC_CENTER}" data-c="${c}"` : ''} aria-label="${COLOR_NAMES[c]}"></button>`;
+  }).join('');
+  return `<div class="factories">${fx}</div><div class="center"><div class="label">Center</div>${cinner || '<span class="muted" style="font-size:13px">empty</span>'}</div>`;
+}
+
+function summaryHtml(s) {
+  const L = s.last;
+  if (!L || !L.roundEnd) return '';
+  const lines = L.roundEnd.map((r, i) => {
+    const parts = [`+${r.wall} wall`];
+    if (r.floor) parts.push(`${r.floor} floor`);
+    if (r.bonus) parts.push(`+${r.bonus} bonus`);
+    return `<div><span>${esc(s.names[i])}</span><span class="muted">${parts.join(' · ')} → <b style="color:var(--text)">${s.players[i].score}</b></span></div>`;
+  }).join('');
+  return `<div class="summary"><div class="kicker" style="margin:0">Round ${s.over ? s.round : s.round - 1} scored</div>${lines}</div>`;
+}
+
+function statusHtml(s) {
+  let big;
+  if (s.over) {
+    const w = M.winners(s).map(i => s.names[i]);
+    big = `🏆 ${esc(w.join(' & '))} ${w.length > 1 ? 'tie' : 'wins'}`;
+  } else if (pending) big = 'Check your move';
+  else if (myTurn()) big = G.hotseat ? `${esc(s.names[s.cur])}'s turn` : 'Your turn';
+  else big = `Waiting for ${esc(s.names[s.cur])}`;
+  const last = moveText(pending || s);
+  let extra = '';
+  if (s.over) {
+    extra = `<div class="summary">${M.standings(s).map((x, k) => `<div><span>${k + 1}. ${esc(x.name)}</span><b>${x.score}</b></div>`).join('')}</div>`;
+  }
+  return `<div class="card status"><div class="big">${big}</div>${last ? `<div class="last">${pending ? 'You: ' : ''}${esc(last)}</div>` : ''}
+    ${summaryHtml(pending || s)}${extra}</div>`;
+}
+
+function renderGame() {
+  const s = pending || G.state;
+  const vi = viewIdx();
+  const interactive = myTurn();
+  const others = s.players.map((_, i) => i).filter(i => i !== vi);
+  app.innerHTML = `
+    <div class="topbar"><button class="back" id="back">‹ Games</button>
+      <span class="muted" style="font-size:13px">${s.over ? 'Final' : 'Round ' + s.round} · move ${s.turn}</span></div>
+    ${statusHtml(s)}
+    <div class="opps" style="grid-template-columns:repeat(${others.length},1fr)">${others.map(i => miniBoard(s, i)).join('')}</div>
+    <div class="card"><div class="kicker"><span>Factories</span>${G.state.bag ? `<span>bag ${G.state.bag.reduce((a, b) => a + b, 0)}</span>` : ''}</div>${factoriesHtml(s, interactive)}</div>
+    ${bigBoard(s, vi, interactive && !!sel)}`;
+
+  let b;
+  if (pending) {
+    b = `<button class="btn ghost" id="undo">Undo</button><button class="btn grow" id="send">${G.hotseat ? 'Done — next player' : 'Send move'}</button>`;
+  } else if (s.over) {
+    b = `<button class="btn ghost grow" id="sharelink">Share result</button><button class="btn grow" id="again">New game</button>`;
+  } else if (interactive && sel) {
+    const k = M.sourceCounts(s, sel.src)[sel.c];
+    b = `<div class="grow">Place <b>${k} ${COLOR_NAMES[sel.c]}</b> — tap a lit row or the floor</div><button class="btn ghost small" id="cancel">Cancel</button>`;
+  } else if (interactive) {
+    b = `<div class="grow muted">Tap a color in a factory or the center</div>`;
+  } else if (G.state.last && G.state.last.p === G.me) {
+    b = `<div class="grow muted">Sent? If not:</div><button class="btn small" id="sharelink">Send link again</button>`;
+  } else {
+    b = `<div class="grow muted">Tap ${esc(s.names[s.cur])}'s link when it arrives</div><button class="btn ghost small" id="paste">Paste</button>`;
+  }
+  bar(b);
+
+  app.querySelector('#back').onclick = () => { screen = 'home'; sel = null; pending = null; render(); };
+  app.querySelectorAll('[data-src]').forEach(el => el.onclick = () => pickTile(+el.dataset.src, +el.dataset.c));
+  app.querySelectorAll('[data-row]').forEach(el => el.onclick = () => placeRow(+el.dataset.row));
+  const on = (id, fn) => { const el = document.getElementById(id); if (el) el.onclick = fn; };
+  on('undo', undo);
+  on('send', commit);
+  on('cancel', () => { sel = null; render(); });
+  on('sharelink', share);
+  on('paste', askPaste);
+  on('again', () => { newForm.names = G.state.names.slice(); newForm.n = G.state.n; screen = 'new'; render(); });
+}
+
+// ---- boot ----
+function boot() {
+  const code = extractCode(location.hash);
+  if (code) {
+    history.replaceState(null, '', location.pathname);
+    if (ingest(code)) return;
+  }
+  // A reload returns to the open game; a fresh launch starts at the games list.
+  let reload = false;
+  try { reload = !!sessionStorage.getItem('mosaic:seen'); sessionStorage.setItem('mosaic:seen', '1'); } catch {}
+  const open = store.get('mosaic:open');
+  if (open != null && reload) {
+    G = loadGame(open);
+    if (G) { screen = 'game'; render(); return; }
+  }
+  screen = 'home';
+  render();
+}
+window.addEventListener('hashchange', () => { const c = extractCode(location.hash); if (c) { history.replaceState(null, '', location.pathname); ingest(c); } });
+boot();
+</script>
+</body>
+</html>
