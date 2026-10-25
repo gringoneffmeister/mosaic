@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#1e1e2e">
 <meta property="og:title" content="Sixes — your move">
 <meta property="og:description" content="Tap to open the game">
+<script src="../theme.js"></script>
 <title>Sixes</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <style>
@@ -64,7 +65,7 @@ button:disabled { opacity: .45; cursor: default; }
 .status { position: relative; }
 .status .big { font-size: 20px; font-weight: 700; }
 .status .last { color: var(--sub); margin-top: 4px; }
-.replay { position: absolute; top: 14px; right: 14px; font-size: 13px; color: var(--peach); }
+.replay { position: absolute; top: 14px; right: 14px; font-size: 13px; color: var(--ink-accent, var(--peach)); }
 .bar { position: fixed; left: 0; right: 0; bottom: 0; background: rgba(24,24,37,.97); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
        border-top: 1px solid var(--surface); padding: 10px 16px calc(12px + env(safe-area-inset-bottom)); z-index: 5; }
 .bar .in { max-width: 448px; margin: 0 auto; display: grid; gap: 10px; }
@@ -82,7 +83,7 @@ button:disabled { opacity: .45; cursor: default; }
 .pill { font-size: 12px; padding: 3px 8px; border-radius: 999px; background: var(--surface2); white-space: nowrap; }
 .pill.go { background: var(--peach); color: var(--crust); font-weight: 650; }
 .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.back { color: var(--peach); font-size: 15px; }
+.back { color: var(--ink-accent, var(--peach)); font-size: 15px; }
 .bagct { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--sub); }
 .bagct .tile { width: 16px; height: 16px; display: inline-block; }
 
@@ -128,6 +129,7 @@ label.check { display: flex; gap: 10px; align-items: center; margin-top: 12px; }
 .prow .note { font-size: 12px; color: var(--sub); font-weight: 500; }
 @media (prefers-reduced-motion: reduce) { .cell.spot, .watch .btn { animation: none; } }
 </style>
+<link rel="stylesheet" href="../theme.css">
 </head>
 <body>
 <div id="app"></div>
@@ -751,7 +753,7 @@ function bar(inner) {
 function renderHome() {
   const games = listGames();
   app.innerHTML = `
-    <div class="topbar"><a class="back" href="../">‹ Mosaic</a><div></div></div>
+    <div class="topbar"><a class="back" href="../">‹ Mosaic</a><button id="theme" aria-label="Colors" style="font-size:20px">🎨</button></div>
     <h1 style="margin-top:0">Sixes</h1>
     <div class="muted" style="margin-bottom:18px">Lines of color and shape, by text message</div>
     <div class="row" style="margin-bottom:16px">
@@ -774,11 +776,12 @@ function renderHome() {
     }).join('')}
     <div class="card how"><b>How it works.</b> Every move makes a link. Send it to the group text; whoever's next taps it and plays.
       The link holds every move, so nobody falls behind — and an old link can't overwrite a newer one. Nothing is stored online.
-      <button style="color:var(--peach);margin-top:8px;display:block" id="rules">How to play ›</button></div>`;
+      <button style="color:var(--ink-accent, var(--peach));margin-top:8px;display:block" id="rules">How to play ›</button></div>`;
   bar(null);
   app.querySelector('#new').onclick = () => { screen = 'new'; render(); };
   app.querySelector('#paste').onclick = askPaste;
   app.querySelector('#rules').onclick = showRules;
+  app.querySelector('#theme').onclick = Theme.open;
   app.querySelectorAll('[data-open]').forEach(b => b.onclick = () => {
     G = loadGame(+b.dataset.open); resetTurn(); pending = null; lastSeq = null; screen = 'game'; centerNext = true; covered = G.hotseat;
     render();
@@ -937,6 +940,7 @@ function renderGame() {
     <div class="topbar"><button class="back" id="back">‹ Games</button>
       <span class="row" style="gap:14px"><span class="bagct" id="bag">${tileHtml(null)}${s.bag.length}</span>
       <button id="mute" aria-label="Sound" style="font-size:17px">${sfx.muted ? '🔇' : '🔊'}</button>
+      <button id="theme" aria-label="Colors" style="font-size:17px">🎨</button>
       <button id="rules" class="muted" aria-label="Rules" style="font-size:15px">?</button></span></div>
     ${statusHtml(g, s)}
     ${chipsHtml(g, s)}
@@ -988,6 +992,7 @@ function renderGame() {
   document.querySelectorAll('.rack [data-slot]').forEach(el => el.onclick = () => tapRack(+el.dataset.slot));
   const on = (id, fn) => { const el = document.getElementById(id); if (el) el.onclick = fn; };
   on('mute', () => { sfx.toggle(); render(); });
+  on('theme', Theme.open);
   on('rules', showRules);
   on('zin', () => { zoom = Math.min(64, (zoom || tableBox.cs) + 8); render(); });
   on('zout', () => { zoom = Math.max(20, (zoom || tableBox.cs) - 8); render(); });

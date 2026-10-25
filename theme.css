@@ -1,0 +1,51 @@
+/* Light palettes for Mosaic, Chess and Sixes (Dark is each page's own :root).
+   theme.js sets <html data-theme> and data-tone="light" for the light ones. Game tiles keep their colors; only the table around them changes. */
+
+:root[data-theme="beige"] {
+  --bg: #efe6d2; --mantle: #e4d7bd; --crust: #2f2a22;
+  --surface: #faf5ea; --surface2: #e9ddc7; --overlay: #a39580;
+  --text: #3a3227; --sub: #7a6d5c; --peach: #e0894a; --green: #3f8f3a; --red: #c4363f;
+  --ink-accent: #a8541c;
+  --light: #f0d9b5; --dark: #b58863;           /* chess: wooden board */
+  --bar-bg: rgba(250,245,234,.95); --scrim: rgba(70,55,35,.45); --veil: rgba(239,230,210,.96);
+}
+:root[data-theme="light"] {
+  --bg: #eff1f5; --mantle: #e3e7ef; --crust: #2b2d3a;
+  --surface: #ffffff; --surface2: #dce0e8; --overlay: #9ca0b0;
+  --text: #4c4f69; --sub: #6c6f85; --peach: #f5844a; --green: #40a02b; --red: #d20f39;
+  --ink-accent: #c4560f;
+  --light: #e8edf9; --dark: #8c9ac4;
+  --bar-bg: rgba(255,255,255,.94); --scrim: rgba(40,45,70,.4); --veil: rgba(239,241,245,.96);
+}
+
+
+/* shared chrome */
+[data-tone="light"] .card, [data-tone="light"] .pchip, [data-tone="light"] .mini { box-shadow: 0 1px 3px rgba(60,45,20,.12); }
+[data-tone="light"] .bar { background: var(--bar-bg); }
+[data-tone="light"] .modal { background: var(--scrim); }
+[data-tone="light"] .watch { background: var(--scrim); }
+[data-tone="light"] .tally { background: var(--veil); }
+[data-tone="light"] .toast { color: #fff; }
+[data-tone="light"] .banner { text-shadow: 0 2px 0 rgba(255,255,255,.6), 0 6px 22px rgba(60,40,10,.35); color: var(--ink-accent); }
+[data-tone="light"] .float { text-shadow: 0 1px 0 rgba(255,255,255,.8), 0 2px 8px rgba(60,40,10,.3); }
+[data-tone="light"] .float.plus { color: var(--green); }
+[data-tone="light"] .float.bonus { color: var(--ink-accent); }
+[data-tone="light"] .chip.on { color: var(--ink-accent); }
+[data-tone="light"] .prow.win { background: linear-gradient(135deg, rgba(240,200,120,.35), rgba(224,137,74,.25)); }
+
+/* Mosaic */
+[data-tone="light"] .factory { background: radial-gradient(circle at 40% 35%, #ffffff, var(--surface2) 72%); box-shadow: inset 0 0 0 1px rgba(0,0,0,.06); }
+[data-tone="light"] .slot.line { box-shadow: inset 0 0 0 1px var(--overlay); }
+[data-tone="light"] .fslot .slot.line { background: #f3d9d3; }
+[data-tone="light"] .faint { opacity: .26; }
+[data-tone="light"] .t3.faint { opacity: .5; }
+[data-tone="light"] .tm, [data-tone="light"] .t4 { box-shadow: inset 0 0 0 1px rgba(0,0,0,.18), inset 0 -2px 0 rgba(0,0,0,.12); }
+
+/* Chess */
+[data-tone="light"] .board { box-shadow: 0 6px 20px rgba(60,40,10,.25); }
+
+/* Sixes: tiles stay dark like the real thing; the table is the light surface. */
+[data-tone="light"] .tile.back { background: repeating-linear-gradient(45deg, #b9a98c 0 6px, #ad9d80 6px 12px); }
+[data-tone="light"] .table { box-shadow: inset 0 1px 4px rgba(60,40,10,.12); }
+
+[data-tone="light"] .cell.spot { box-shadow: inset 0 0 0 2px var(--peach); background: rgba(224,137,74,.16); }
