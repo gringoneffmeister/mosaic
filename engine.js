@@ -106,15 +106,38 @@
   }
 
   function bonuses(p) {
-    let rows = 0, cols = 0, colors = 0;
-    for (let r = 0; r < 5; r++) if ([0, 1, 2, 3, 4].every(c => p.wall[r * 5 + c])) rows++;
-    for (let c = 0; c < 5; c++) if ([0, 1, 2, 3, 4].every(r => p.wall[r * 5 + c])) cols++;
-    for (let k = 0; k < 5; k++) if ([0, 1, 2, 3, 4].every(r => p.wall[r * 5 + wallCol(r, k)])) colors++;
-    return { rows, cols, colors, points: rows * 2 + cols * 7 + colors * 10 };
+    const F = [0, 1, 2, 3, 4];
+    const rowList = F.filter(r => F.every(c => p.wall[r * 5 + c]));
+    const colList = F.filter(c => F.every(r => p.wall[r * 5 + c]));
+    const colorList = F.filter(k => F.every(r => p.wall[r * 5 + wallCol(r, k)]));
+    const rows = rowList.length, cols = colList.length, colors = colorList.length;
+    return { rows, cols, colors, rowList, colList, colorList, points: rows * 2 + cols * 7 + colors * 10 };
+  }
+
+  // The wall tiles a round-end would place, in scoring order, with the run each one scores.
+  // UI uses it to animate; endRound uses it to score, so the two can't disagree.
+  function scoreSteps(p) {
+    const wall = p.wall.slice();
+    const steps = [];
+    for (let r = 0; r < 5; r++) {
+      const L = p.lines[r];
+      if (L.n !== r + 1) continue;
+      const col = wallCol(r, L.c);
+      wall[r * 5 + col] = true;
+      const h = [], v = [];
+      for (let x = col; x >= 0 && wall[r * 5 + x]; x--) h.push(r * 5 + x);
+      for (let x = col + 1; x < 5 && wall[r * 5 + x]; x++) h.push(r * 5 + x);
+      for (let y = r - 1; y >= 0 && wall[y * 5 + col]; y--) v.push(y * 5 + col);
+      for (let y = r + 1; y < 5 && wall[y * 5 + col]; y++) v.push(y * 5 + col);
+      const run = (h.length > 1 ? h : [r * 5 + col]).concat(v);
+      steps.push({ r, col, c: L.c, pts: placeScore(wall, r, col), run });
+    }
+    return steps;
   }
 
   // move = { src: factory index | SRC_CENTER, c: color, dst: row 0–4 | DST_FLOOR }
-  function applyMove(prev, move) {
+  // hold: stop before round-end scoring (UI shows the board as it stood, then animates scoring).
+  function applyMove(prev, move, hold) {
     if (prev.over) throw new Error('Game is over');
     const s = clone(prev);
     const p = s.players[s.cur];
@@ -154,7 +177,7 @@
     s.turn++;
 
     const empty = s.factories.every(f => sum(f) === 0) && sum(s.center) === 0;
-    if (empty) endRound(s);
+    if (empty) { if (!hold) endRound(s); }
     else s.cur = (s.cur + 1) % s.n;
     return s;
   }
@@ -163,15 +186,11 @@
     const summary = [];
     for (const p of s.players) {
       let wallPts = 0;
-      for (let r = 0; r < 5; r++) {
-        const L = p.lines[r];
-        if (L.n === r + 1) {
-          const col = wallCol(r, L.c);
-          p.wall[r * 5 + col] = true;
-          wallPts += placeScore(p.wall, r, col);
-          s.lid[L.c] += r;
-          p.lines[r] = { c: -1, n: 0 };
-        }
+      for (const st of scoreSteps(p)) {
+        p.wall[st.r * 5 + st.col] = true;
+        wallPts += st.pts;
+        s.lid[st.c] += st.r;
+        p.lines[st.r] = { c: -1, n: 0 };
       }
       const pen = floorPenalty(p.floor);
       for (const t of p.floor) if (t !== MARKER) s.lid[t]++;
@@ -343,7 +362,7 @@
   const api = {
     NCOLORS, MARKER, FACTORIES, FLOOR_PEN, SRC_CENTER, DST_FLOOR,
     wallCol, wallColor, newGame, applyMove, legalRows, canPlace, sourceCounts,
-    placeScore, floorPenalty, bonuses, standings, winners, totalTiles, encode, decode,
+    placeScore, scoreSteps, floorPenalty, bonuses, standings, winners, totalTiles, encode, decode,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Mosaic = api;

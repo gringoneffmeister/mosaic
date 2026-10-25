@@ -84,7 +84,15 @@ function play(n, seed) {
     // Bias toward pattern lines so games finish like real ones.
     const lines = opts.filter(o => o.dst !== M.DST_FLOOR);
     const pool = lines.length && r() < 0.9 ? lines : opts;
-    s = M.applyMove(s, pool[Math.floor(r() * pool.length)]);
+    const mv = pool[Math.floor(r() * pool.length)];
+    const held = M.applyMove(s, mv, true);
+    s = M.applyMove(s, mv);
+    if (s.last.roundEnd) {
+      // hold stops right before scoring; scoreSteps on that board = what endRound scored
+      assert(!held.last.roundEnd && held.round === (s.over ? s.round : s.round - 1));
+      held.players.forEach((p, i) => assert.strictEqual(M.scoreSteps(p).reduce((a, x) => a + x.pts, 0), s.last.roundEnd[i].wall));
+      checks += 2;
+    } else assert.deepStrictEqual(held, s, 'hold is a no-op mid-round');
     moves++;
     assert.strictEqual(M.totalTiles(s), 100, 'tiles conserved');
     const code = M.encode(s);

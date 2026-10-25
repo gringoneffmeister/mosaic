@@ -123,9 +123,47 @@ label.check { display: flex; gap: 10px; align-items: center; margin-top: 12px; }
 .modal { position: fixed; inset: 0; background: rgba(17,17,27,.75); display: grid; place-items: end center; z-index: 10; }
 .modal .sheet { background: var(--surface); width: 100%; max-width: 480px; border-radius: 20px 20px 0 0; padding: 20px 16px calc(20px + env(safe-area-inset-bottom)); }
 .toast { position: fixed; left: 50%; top: max(16px, env(safe-area-inset-top)); transform: translateX(-50%); background: var(--crust); color: var(--text);
-         padding: 10px 14px; border-radius: 12px; z-index: 20; box-shadow: 0 6px 24px rgba(0,0,0,.4); max-width: 90vw; font-size: 14px; }
+         padding: 10px 14px; border-radius: 12px; z-index: 40; box-shadow: 0 6px 24px rgba(0,0,0,.4); max-width: 90vw; font-size: 14px; }
 .how { font-size: 13px; color: var(--sub); }
 .how b { color: var(--text); }
+
+/* animation + sound */
+.pick.on { animation: hop .42s cubic-bezier(.3,1.7,.5,1) both; animation-delay: calc(var(--i, 0) * 50ms); }
+@keyframes hop { 0% { transform: translateY(0); } 45% { transform: translateY(-10px) rotate(-6deg) scale(1.08); } 100% { transform: translateY(-3px); } }
+.brow.can, .floor.can { animation: lit 1.3s ease-in-out infinite; }
+@keyframes lit { 0%, 100% { background: rgba(250,179,135,.12); } 50% { background: rgba(250,179,135,.32); } }
+[data-score] { display: inline-block; }
+.t9 { background: #585b70; } .t9::after { display: none; }
+.fx { position: fixed; inset: 0; pointer-events: none; z-index: 30; overflow: hidden; }
+.fx > .flying { position: fixed; margin: 0; transform-origin: center; outline: none;
+                box-shadow: 0 8px 16px rgba(0,0,0,.45), inset 0 -2px 0 rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.25); }
+.fx > .confetto { position: fixed; }
+.float { position: fixed; font-weight: 800; font-size: 18px; text-shadow: 0 2px 8px rgba(0,0,0,.7); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.float.plus { color: var(--green); } .float.minus { color: var(--red); } .float.bonus { color: var(--peach); font-size: 26px; }
+.banner { position: fixed; left: 0; right: 0; top: 36%; text-align: center; font-size: 44px; font-weight: 800; letter-spacing: -.02em;
+          color: var(--peach); text-shadow: 0 4px 28px rgba(0,0,0,.8); }
+.status { position: relative; }
+.replay { position: absolute; top: 14px; right: 14px; font-size: 13px; color: var(--peach); }
+.watch { position: fixed; inset: 0; z-index: 12; background: rgba(17,17,27,.55); display: grid; place-content: center; justify-items: center; gap: 16px; }
+.watch .btn { font-size: 18px; padding: 16px 22px; box-shadow: 0 10px 30px rgba(0,0,0,.5); animation: breathe 1.6s ease-in-out infinite; }
+@keyframes breathe { 50% { transform: scale(1.05); } }
+.tally { position: fixed; inset: 0; z-index: 25; background: rgba(17,17,27,.94); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+         display: grid; place-items: center; padding: 16px; overflow-y: auto; }
+.tsheet { width: 100%; max-width: 400px; }
+.tname { font-size: 22px; font-weight: 700; text-align: center; }
+.tscore { font-size: 56px; font-weight: 800; text-align: center; color: var(--peach); font-variant-numeric: tabular-nums; line-height: 1.1; margin-bottom: 14px; }
+.tscore span { display: inline-block; }
+.twall { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; width: min(280px, 78vw); margin: 0 auto; }
+.twall .t { width: 100%; height: auto; aspect-ratio: 1; border-radius: 9px; }
+.twall .t.lit { outline: 2px solid var(--peach); outline-offset: 1px; }
+.tlog { margin-top: 16px; min-height: 96px; display: grid; gap: 4px; align-content: start; font-size: 15px; text-align: center; color: var(--sub); }
+.tlog b { color: var(--peach); }
+.podium { display: grid; gap: 8px; }
+.prow { display: flex; align-items: center; gap: 12px; background: var(--surface); border-radius: 14px; padding: 12px 14px; font-size: 17px; }
+.prow.win { background: linear-gradient(135deg, rgba(249,226,175,.22), rgba(250,179,135,.22)); outline: 2px solid var(--peach); font-size: 20px; font-weight: 700; }
+.prow .medal { font-size: 26px; width: 34px; text-align: center; }
+.prow .pts { margin-left: auto; font-weight: 750; font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .pick.on, .brow.can, .floor.can, .watch .btn { animation: none; } }
 </style>
 </head>
 <body>
@@ -170,7 +208,7 @@ function listGames() {
 
 // ---- helpers ----
 const esc = s => String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
-const tile = (c, cls = '') => `<div class="t ${c === M.MARKER ? 'tm' : 't' + c} ${cls}">${c === M.MARKER ? '1' : ''}</div>`;
+const tile = (c, cls = '', attrs = '') => `<div class="t ${c === M.MARKER ? 'tm' : 't' + c} ${cls}" ${attrs}>${c === M.MARKER ? '1' : ''}</div>`;
 const baseUrl = () => location.origin + location.pathname;
 const linkFor = s => baseUrl() + '#g=' + M.encode(s);
 
@@ -210,7 +248,7 @@ function viewIdx() {
 }
 function myTurn() {
   const s = G.state;
-  return !s.over && !pending && (G.hotseat || G.me === s.cur);
+  return !busy && !s.over && !pending && (G.hotseat || G.me === s.cur);
 }
 
 // ---- incoming links / codes ----
@@ -218,18 +256,22 @@ function ingest(code) {
   let s;
   try { s = M.decode(code); } catch (e) { toast(e.message); return false; }
   const prev = loadGame(s.id);
+  let seq = null;
+  stopAnim();
   if (prev && prev.state.turn > s.turn) {
     G = prev;
     toast(`That's an older link — you already have move ${prev.state.turn}`);
   } else if (prev && prev.state.turn === s.turn) {
     G = prev;
   } else {
+    seq = buildSeq(prev && prev.state, s);
     G = { state: s, me: prev ? prev.me : null, hotseat: prev ? prev.hotseat : false };
   }
-  sel = null; pending = null; screen = 'game';
+  sel = null; pending = null; lastSeq = null; screen = 'game';
   saveGame();
   render();
-  if (G.me == null && !G.hotseat) askWho();
+  if (G.me == null && !G.hotseat) askWho(() => offerWatch(seq));
+  else offerWatch(seq);
   return true;
 }
 
@@ -248,23 +290,28 @@ function pickTile(src, c) {
   }
   sel = sel && sel.src === src && sel.c === c ? null : { src, c };
   render();
+  if (sel) { sfx.pick(M.sourceCounts(G.state, src)[c]); buzz(6); }
+  else sfx.clack(0, .9, .4);
 }
 
 function placeRow(row) {
-  if (!sel) return;
+  if (!sel || busy) return;
   const p = G.state.players[G.state.cur];
   if (row !== M.DST_FLOOR && !M.canPlace(p, row, sel.c)) return;
-  pending = M.applyMove(G.state, { src: sel.src, c: sel.c, dst: row });
+  const move = { src: sel.src, c: sel.c, dst: row };
+  const A = G.state;
+  pending = M.applyMove(A, move);
   sel = null;
-  render();
+  animateTurn({ A, B: M.applyMove(A, move, true), C: pending }, true);
 }
 
-function undo() { pending = null; render(); }
+function undo() { pending = null; lastSeq = null; render(); sfx.whoosh(); }
 
 function commit() {
   G.state = pending;
   pending = null;
   saveGame();
+  sfx.whoosh();
   if (!G.hotseat) share(); // must run inside the tap for the share sheet to open
   render();
 }
@@ -293,7 +340,7 @@ function modal(html) {
   return m;
 }
 
-function askWho() {
+function askWho(then) {
   const s = G.state;
   const m = modal(`<div class="kicker">Who's on this phone?</div>
     <div class="stack">${s.names.map((n, i) => `<button class="btn ghost" data-i="${i}">${esc(n)}</button>`).join('')}
@@ -302,6 +349,7 @@ function askWho() {
     if (b.dataset.i === 'hot') G.hotseat = true;
     else { G.me = +b.dataset.i; store.set('mosaic:name', s.names[G.me]); }
     saveGame(); m.remove(); render();
+    if (then) then();
   });
 }
 
@@ -323,6 +371,541 @@ function showLink(msg) {
     <button class="btn" style="width:100%;margin-top:12px" id="ok">Done</button>`);
   m.querySelector('textarea').select();
   m.querySelector('#ok').onclick = () => m.remove();
+}
+
+// ---- animation state ----
+let view = null;      // state on screen while an animation runs (overrides pending / G.state)
+let phase = null;     // 'move' | 'score' | 'refill' while animating
+let busy = false;     // input locked; a tap skips to the end
+let skipping = false;
+let lastSeq = null;   // { A?, B?, C } — the last thing animated, for Replay
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const running = new Set();
+const waiters = new Set();
+const fx = document.createElement('div');
+fx.className = 'fx';
+document.body.appendChild(fx);
+
+// ---- sound: synthesized with WebAudio, no audio files ----
+const sfx = (() => {
+  let ctx = null, out = null, noise = null;
+  let muted = store.get('mosaic:mute') === true;
+  function ac() {
+    if (ctx) return ctx;
+    const C = window.AudioContext || window.webkitAudioContext;
+    if (!C) return null;
+    ctx = new C();
+    out = ctx.createGain();
+    out.gain.value = 0.6;
+    out.connect(ctx.destination);
+    noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+    const d = noise.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    return ctx;
+  }
+  const live = () => !muted && !skipping && ctx && ctx.state === 'running';
+  const now = (dt = 0) => ctx.currentTime + Math.max(0, dt);
+  function env(g, t, peak, a, d) {
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + a);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + a + d);
+  }
+  function tone(type, f, t, peak, a, d, f2) {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(f, t);
+    if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + a + d);
+    env(g, t, peak, a, d);
+    o.connect(g).connect(out);
+    o.start(t);
+    o.stop(t + a + d + 0.05);
+  }
+  function hiss(t, freq, q, peak, d, f2, type = 'bandpass') {
+    const n = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+    n.buffer = noise;
+    f.type = type;
+    f.frequency.setValueAtTime(freq, t);
+    f.Q.value = q;
+    if (f2) f.frequency.exponentialRampToValueAtTime(f2, t + d);
+    env(g, t, peak, 0.002, d);
+    n.connect(f).connect(g).connect(out);
+    n.start(t, Math.random() * 0.5);
+    n.stop(t + d + 0.05);
+  }
+  const PENTA = [523.25, 587.33, 659.25, 783.99, 880, 1046.5, 1174.66, 1318.51, 1567.98, 1760, 2093, 2349.32];
+  return {
+    unlock() { const c = ac(); if (c && c.state !== 'running') c.resume().catch(() => {}); },
+    ready: () => !!ctx && ctx.state === 'running',
+    get muted() { return muted; },
+    toggle() { muted = !muted; store.set('mosaic:mute', muted); if (!muted) this.unlock(); },
+    // Ceramic clack: a tile set down on a tile.
+    clack(dt = 0, pitch = 1, vol = 1) {
+      if (!live()) return;
+      const t = now(dt), f = 2600 * pitch * (0.92 + Math.random() * 0.16);
+      hiss(t, f, 4, 0.5 * vol, 0.045);
+      tone('triangle', f / 2.7, t, 0.22 * vol, 0.002, 0.06);
+    },
+    pick(n) { for (let i = 0; i < n; i++) this.clack(i * 0.05, 1.25, 0.6); },
+    chime(step, dt = 0, vol = 1) {
+      if (!live()) return;
+      const t = now(dt), f = PENTA[Math.max(0, Math.min(step, PENTA.length - 1))];
+      tone('sine', f, t, 0.28 * vol, 0.005, 0.9);
+      tone('sine', f * 2.01, t, 0.07 * vol, 0.005, 0.45);
+      tone('triangle', f * 3, t, 0.03 * vol, 0.002, 0.15);
+    },
+    thud(dt = 0) {
+      if (!live()) return;
+      const t = now(dt);
+      tone('sine', 150, t, 0.5, 0.005, 0.28, 55);
+      hiss(t, 500, 0.7, 0.25, 0.12, 0, 'lowpass');
+    },
+    whoosh(dt = 0) { if (live()) hiss(now(dt), 350, 1.2, 0.22, 0.4, 2600); },
+    pop(dt = 0) { if (live()) tone('sine', 500, now(dt), 0.2, 0.004, 0.09, 1100); },
+    arp(base, dt = 0) { for (let i = 0; i < 4; i++) this.chime(base + i * 2, dt + i * 0.07, 0.8); },
+    fanfare(dt = 0) {
+      if (!live()) return;
+      [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
+        const t = now(dt + i * 0.13), hold = i === 3 ? 1.2 : 0.25;
+        tone('triangle', f, t, 0.22, 0.01, hold);
+        tone('sine', f * 2, t, 0.06, 0.01, hold * 0.7);
+      });
+      for (let i = 0; i < 8; i++) this.chime(6 + (i % 5), dt + 0.55 + i * 0.06, 0.35);
+    },
+  };
+})();
+// iOS only lets audio start inside a tap.
+['touchend', 'click', 'keydown'].forEach(ev => document.addEventListener(ev, () => sfx.unlock(), { capture: true }));
+const buzz = ms => {
+  try { if (!sfx.muted && navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) navigator.vibrate(ms); } catch {}
+};
+
+// A tap during an animation skips it (and is swallowed so it can't make a move).
+document.addEventListener('click', e => {
+  if (!busy || e.target.closest('.watch')) return;
+  e.stopPropagation();
+  e.preventDefault();
+  skipAnim();
+}, true);
+
+function wait(ms) {
+  if (skipping) return Promise.resolve();
+  return new Promise(res => {
+    const done = () => { waiters.delete(done); clearTimeout(t); res(); };
+    const t = setTimeout(done, ms);
+    waiters.add(done);
+  });
+}
+function anim(el, frames, opts) {
+  if (!el) return Promise.resolve();
+  const a = el.animate(frames, opts);
+  if (skipping) a.finish();
+  running.add(a);
+  return a.finished.catch(() => {}).finally(() => running.delete(a));
+}
+function skipAnim() {
+  if (!busy || skipping) return;
+  skipping = true;
+  [...waiters].forEach(f => f());
+  running.forEach(a => { try { a.finish(); } catch {} });
+}
+function stopAnim() {
+  skipAnim();
+  document.querySelectorAll('.tally, .watch').forEach(e => e.remove());
+}
+
+const boardEl = p => app.querySelector(`[data-p="${p}"]`);
+const q = (root, s) => (root ? root.querySelector(s) : null);
+const cloneCls = el => el.className.replace(/\b(faint|on|dim|pick|line)\b/g, '');
+const hide = el => { if (el) el.style.visibility = 'hidden'; };
+const show = el => { if (el) el.style.visibility = ''; };
+
+// Clone a tile at rect `a` and arc it onto element `to`.
+function fly(a, cls, to, { delay = 0, dur = 430, arc = 36, spin = 0 } = {}) {
+  if (skipping || !to) return Promise.resolve();
+  const b = to.getBoundingClientRect();
+  const d = document.createElement('div');
+  d.className = cls + ' flying';
+  Object.assign(d.style, { left: a.left + 'px', top: a.top + 'px', width: a.width + 'px', height: a.height + 'px' });
+  fx.appendChild(d);
+  const dx = b.left + b.width / 2 - (a.left + a.width / 2), dy = b.top + b.height / 2 - (a.top + a.height / 2);
+  const k = b.width / a.width;
+  return anim(d, [
+    { transform: 'translate(0,0) scale(1) rotate(0deg)' },
+    { transform: `translate(${dx * 0.5}px, ${dy * 0.5 - arc}px) scale(${((1 + k) / 2) * 1.2}) rotate(${spin}deg)`, offset: 0.5 },
+    { transform: `translate(${dx}px, ${dy}px) scale(${k}) rotate(0deg)` },
+  ], { duration: dur, delay, easing: 'cubic-bezier(.45,.05,.35,1)', fill: 'both' }).then(() => d.remove());
+}
+const squash = (el, delay = 0) => anim(el, [{ transform: 'scale(1.3)' }, { transform: 'scale(.88)' }, { transform: 'scale(1)' }], { duration: 280, delay, easing: 'ease-out' });
+const glow = (el, delay = 0) => anim(el, [
+  { transform: 'scale(1)', filter: 'brightness(1)' },
+  { transform: 'scale(1.2)', filter: 'brightness(1.7) drop-shadow(0 0 6px #fab387)' },
+  { transform: 'scale(1)', filter: 'brightness(1)' },
+], { duration: 520, delay, easing: 'ease-out' });
+
+function floatText(el, text, kind = 'plus', size) {
+  if (skipping || !el) return;
+  const r = el.getBoundingClientRect();
+  const d = document.createElement('div');
+  d.className = 'float ' + kind;
+  d.textContent = text;
+  d.style.left = r.left + r.width / 2 + 'px';
+  d.style.top = r.top - 4 + 'px';
+  if (size) d.style.fontSize = size + 'px';
+  fx.appendChild(d);
+  anim(d, [
+    { transform: 'translate(-50%, 0) scale(.5)', opacity: 0 },
+    { transform: 'translate(-50%, -14px) scale(1.15)', opacity: 1, offset: 0.25 },
+    { transform: 'translate(-50%, -42px) scale(1)', opacity: 0 },
+  ], { duration: 1150, easing: 'ease-out', fill: 'both' }).then(() => d.remove());
+}
+
+function countUp(el, from, to, dur = 450) {
+  if (!el) return;
+  if (skipping || from === to) { el.textContent = to; return; }
+  const t0 = performance.now();
+  const step = t => {
+    const k = Math.min(1, (t - t0) / dur);
+    el.textContent = Math.round(from + (to - from) * (1 - Math.pow(1 - k, 3)));
+    if (k < 1 && !skipping) requestAnimationFrame(step);
+    else el.textContent = to;
+  };
+  requestAnimationFrame(step);
+  anim(el, [{ transform: 'scale(1)' }, { transform: 'scale(1.3)' }, { transform: 'scale(1)' }], { duration: 380 });
+}
+
+function banner(text) {
+  if (skipping || RM) return;
+  const d = document.createElement('div');
+  d.className = 'banner';
+  d.textContent = text;
+  fx.appendChild(d);
+  anim(d, [
+    { transform: 'translateX(-60%) skewX(-12deg)', opacity: 0 },
+    { transform: 'translateX(0) skewX(0)', opacity: 1, offset: 0.2 },
+    { transform: 'translateX(0) scale(1.04)', opacity: 1, offset: 0.75 },
+    { transform: 'translateX(60%) skewX(12deg)', opacity: 0 },
+  ], { duration: 1500, easing: 'ease-in-out', fill: 'both' }).then(() => d.remove());
+}
+
+// A rain of tiles.
+function confetti(n = 80) {
+  if (RM) return;
+  for (let i = 0; i < n; i++) {
+    const d = document.createElement('div');
+    const size = 10 + Math.random() * 14;
+    d.className = 't t' + (i % 5) + ' confetto';
+    Object.assign(d.style, { left: Math.random() * innerWidth + 'px', top: '-30px', width: size + 'px', height: size + 'px' });
+    fx.appendChild(d);
+    const dx = (Math.random() - 0.5) * 180, rot = (Math.random() - 0.5) * 900;
+    d.animate([{ transform: 'translate(0,0) rotate(0deg)' }, { transform: `translate(${dx}px, ${innerHeight + 80}px) rotate(${rot}deg)` }],
+      { duration: 1800 + Math.random() * 1600, delay: Math.random() * 700, easing: 'cubic-bezier(.25,.6,.5,1)', fill: 'both' })
+      .finished.then(() => d.remove()).catch(() => {});
+  }
+}
+
+// ---- move: picked tiles arc to the line/floor, leftovers slide to the center ----
+async function playMove(A, B) {
+  const L = B.last, p = L.p;
+  const srcSel = L.src === M.SRC_CENTER ? `[data-tile="c-${L.c}"]` : `[data-tile="f${L.src}-${L.c}"]`;
+  const picked = [...app.querySelectorAll(srcSel)].map(el => ({ r: el.getBoundingClientRect(), cls: cloneCls(el) }));
+  const mk = L.marker ? q(app, '[data-tile="cm"]') : null;
+  const mkRect = mk && mk.getBoundingClientRect();
+  const rest = L.src === M.SRC_CENTER ? [] : [...app.querySelectorAll(`[data-tile^="f${L.src}-"]`)]
+    .filter(el => !el.matches(srcSel))
+    .map(el => ({ r: el.getBoundingClientRect(), cls: cloneCls(el), c: +el.dataset.tile.split('-')[1] }));
+
+  view = B; phase = 'move';
+  renderGame();
+  const bd = boardEl(p);
+  const n0 = L.dst === M.DST_FLOOR ? 0 : A.players[p].lines[L.dst].n;
+  const dests = [];
+  for (let i = 0; i < L.k - L.toFloor; i++) dests.push(q(bd, `[data-l="${L.dst}-${n0 + i}"]`));
+  let f = A.players[p].floor.length;
+  const mkDest = L.marker && f < 7 ? q(bd, `[data-f="${f++}"]`) : null;
+  for (let i = 0; i < L.toFloor; i++) dests.push(f < 7 ? q(bd, `[data-f="${f++}"]`) : null);
+  // Leftovers land on the newest center tiles of their color.
+  const centerDest = [];
+  for (let c = 0; c < 5; c++) {
+    const els = [...app.querySelectorAll(`[data-tile="c-${c}"]`)];
+    const added = B.center[c] - A.center[c];
+    if (L.src !== M.SRC_CENTER && added > 0) centerDest[c] = els.slice(-added);
+  }
+  dests.forEach(hide); hide(mkDest);
+  centerDest.forEach(list => list && list.forEach(hide));
+
+  const jobs = [];
+  picked.forEach((t, i) => {
+    const to = dests[i];
+    jobs.push(fly(t.r, t.cls, to, { delay: i * 85, spin: 10 }).then(() => {
+      show(to);
+      if (!to) return;
+      squash(to);
+      buzz(8);
+      if (to.dataset.f != null) { sfx.clack(0, 0.6, 1.1); floatText(to, M.FLOOR_PEN[+to.dataset.f], 'minus', 13); }
+      else sfx.clack(0, 0.85 + i * 0.06, 1);
+    }));
+  });
+  if (mkRect) jobs.push(fly(mkRect, 'tm t', mkDest, { delay: 60, spin: -20 }).then(() => { show(mkDest); squash(mkDest); sfx.pop(); }));
+  const used = [0, 0, 0, 0, 0];
+  rest.forEach((t, j) => {
+    const to = centerDest[t.c] && centerDest[t.c][used[t.c]++];
+    jobs.push(fly(t.r, t.cls, to, { delay: 140 + j * 50, arc: 16, dur: 380 }).then(() => { show(to); sfx.clack(0, 1.15, 0.45); }));
+  });
+  await Promise.all(jobs);
+  app.querySelectorAll('[style*="visibility"]').forEach(show);
+}
+
+// ---- round end: full lines slide onto the wall, runs light up, floor tiles fall ----
+async function playScoring(B, C) {
+  view = B; phase = 'score';
+  renderGame();
+  await wait(450);
+  const vi = viewIdx();
+  const steps = B.players.map(pl => M.scoreSteps(pl));
+  const score = B.players.map(pl => pl.score);
+  const most = Math.max(0, ...steps.map(x => x.length));
+  for (let k = 0; k < most; k++) {
+    let sounded = false;
+    for (let p = 0; p < B.n; p++) {
+      const st = steps[p][k];
+      if (!st) continue;
+      const bd = boardEl(p), big = bd.classList.contains('board');
+      const line = [];
+      for (let j = 0; j <= st.r; j++) line.push(q(bd, `[data-l="${st.r}-${j}"]`));
+      const wallEl = q(bd, `[data-w="${st.r * 5 + st.col}"]`);
+      const lead = line[0], from = lead.getBoundingClientRect(), cls = cloneCls(lead);
+      lead.className = (big ? 'slot' : 'ms') + ' line';
+      line.slice(1).forEach((el, j) => anim(el, [
+        { opacity: 1, transform: 'none' },
+        { opacity: 0, transform: 'translateY(12px) scale(.6) rotate(25deg)' },
+      ], { duration: 420, delay: 220 + j * 45, easing: 'ease-in', fill: 'forwards' }));
+      const loud = p === vi || !sounded;
+      sounded = true;
+      fly(from, cls, wallEl, { dur: 380, arc: big ? 18 : 6 }).then(() => {
+        wallEl.classList.remove('faint');
+        squash(wallEl);
+        st.run.forEach((w, i) => glow(q(bd, `[data-w="${w}"]`), 80 + i * 40));
+        floatText(wallEl, '+' + st.pts, 'plus', big ? 20 : 13);
+        countUp(q(bd, '[data-score]'), score[p], score[p] + st.pts);
+        score[p] += st.pts;
+        if (loud) { sfx.chime(Math.min(st.pts + 1, 11), 0, p === vi ? 1 : 0.5); buzz(10); }
+      });
+    }
+    await wait(720);
+  }
+
+  let pain = false;
+  for (let p = 0; p < B.n; p++) {
+    const fl = B.players[p].floor;
+    if (!fl.length) continue;
+    pain = true;
+    const bd = boardEl(p), big = bd.classList.contains('board');
+    const tiles = [...bd.querySelectorAll('[data-f]')].filter(el => el.classList.contains('t'));
+    tiles.forEach((el, i) => {
+      anim(el, [{ transform: 'translateX(0)' }, { transform: 'translateX(-3px) rotate(-6deg)' }, { transform: 'translateX(3px) rotate(6deg)' }, { transform: 'translateX(0)' }], { duration: 280, delay: i * 40 });
+      anim(el, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(22px) rotate(30deg)' }], { duration: 480, delay: 320 + i * 50, easing: 'ease-in', fill: 'forwards' });
+    });
+    const pen = M.floorPenalty(fl), to = Math.max(0, score[p] + pen);
+    floatText(q(bd, '.floor, .mfloor'), String(pen), 'minus', big ? 22 : 14);
+    countUp(q(bd, '[data-score]'), score[p], to);
+    score[p] = to;
+  }
+  if (pain) { sfx.thud(0.3); buzz(35); await wait(1000); }
+  await wait(250);
+}
+
+// ---- new round: factories fill with a clatter ----
+async function playRefill(s) {
+  phase = 'refill';
+  banner(s.round === 1 && s.turn === 0 ? 'Let’s play' : `Round ${s.round}`);
+  sfx.whoosh();
+  const tiles = [...app.querySelectorAll('.factory .t')];
+  const start = RM ? 0 : 350;
+  tiles.forEach((el, i) => {
+    anim(el, [
+      { transform: 'scale(0) rotate(-120deg)', opacity: 0 },
+      { transform: 'scale(1.18) rotate(8deg)', opacity: 1, offset: 0.7 },
+      { transform: 'scale(1) rotate(0deg)', opacity: 1 },
+    ], { duration: 380, delay: start + i * 30, easing: 'ease-out', fill: 'backwards' });
+    if (i % 2 === 0) sfx.clack((start + i * 30) / 1000, 1.1, 0.4);
+  });
+  const mk = q(app, '[data-tile="cm"]');
+  anim(mk, [{ transform: 'scale(0)' }, { transform: 'scale(1.3)' }, { transform: 'scale(1)' }], { duration: 400, delay: start + tiles.length * 30, fill: 'backwards' });
+  sfx.pop((start + tiles.length * 30) / 1000);
+  await wait(start + tiles.length * 30 + 450);
+}
+
+// Plays one turn: the move (A → B), round scoring (B → C), refill, final tally.
+// live: the mover just tapped, so A is already on screen.
+async function animateTurn(seq, live) {
+  if (!seq || busy) return;
+  lastSeq = seq;
+  busy = true;
+  skipping = RM;
+  const C = seq.C;
+  const scored = !!(seq.B && C.last && C.last.roundEnd);
+  try {
+    if (seq.A) {
+      if (!live) { view = seq.A; phase = 'move'; renderGame(); await wait(500); }
+      await playMove(seq.A, seq.B);
+      await wait(scored ? 450 : 150);
+    }
+    if (scored) await playScoring(seq.B, C);
+    view = null;
+    renderGame();
+    if (scored && !C.over) { skipping = RM; await playRefill(C); }
+  } finally {
+    fx.querySelectorAll('.flying, .float').forEach(e => e.remove());
+    view = null; phase = null; busy = false; skipping = false;
+  }
+  renderGame();
+  if (C.over) finalTally(C);
+  else if (!seq.A && !seq.B) pulseLast(C);
+}
+
+// No earlier board to replay from: just light up what the last player placed.
+function pulseLast(s) {
+  const L = s.last;
+  if (!L || L.roundEnd) return;
+  const bd = boardEl(L.p);
+  const els = L.dst === M.DST_FLOOR ? [] : [...bd.querySelectorAll(`[data-l^="${L.dst}-"]`)].filter(el => el.classList.contains('t'));
+  els.forEach((el, i) => glow(el, 300 + i * 70));
+}
+
+// What to animate when a link arrives, given what this phone last saw (P).
+function buildSeq(P, s) {
+  const L = s.last;
+  if (!L) return s.over ? { C: s } : null;
+  const move = { src: L.src, c: L.c, dst: L.dst };
+  if (P && P.turn === s.turn - 1) {
+    try {
+      if (M.encode(M.applyMove(P, move)) === M.encode(s)) return { A: P, B: M.applyMove(P, move, true), C: s };
+    } catch {}
+  }
+  if (L.roundEnd && P && !P.over && P.turn < s.turn && P.round === (s.over ? s.round : s.round - 1)) {
+    const B = boardsBeforeScoring(P, s);
+    if (B) return { B, C: s };
+  }
+  return { C: s };
+}
+
+// Rebuild the boards just before round scoring from an earlier state of the same round.
+// Walls and scores only change at round end, so P has both; the new wall tiles tell
+// which lines were full. Floor colors are unknown (grey), its length comes from the penalty.
+function boardsBeforeScoring(P, s) {
+  const B = JSON.parse(JSON.stringify(s));
+  B.over = false; B.round = P.round; B.cur = s.last.p; B.centerMarker = false;
+  B.factories = B.factories.map(() => [0, 0, 0, 0, 0]);
+  B.center = [0, 0, 0, 0, 0];
+  B.last = { ...s.last, roundEnd: null };
+  const CUM = [0, 1, 2, 4, 6, 8, 11, 14];
+  for (let i = 0; i < s.n; i++) {
+    const pb = B.players[i], old = P.players[i].wall, nw = s.players[i].wall;
+    if (old.some((w, j) => w && !nw[j])) return null;
+    pb.wall = old.slice();
+    pb.score = P.players[i].score;
+    for (let r = 0; r < 5; r++) {
+      const added = [0, 1, 2, 3, 4].filter(c => nw[r * 5 + c] && !old[r * 5 + c]);
+      if (added.length > 1) return null;
+      if (added.length) pb.lines[r] = { c: M.wallColor(r, added[0]), n: r + 1 };
+    }
+    const len = CUM.indexOf(-s.last.roundEnd[i].floor);
+    if (len < 0) return null;
+    pb.floor = Array.from({ length: len }, (_, k) => (k === 0 && i === s.first ? M.MARKER : 9));
+    if (M.scoreSteps(pb).reduce((a, x) => a + x.pts, 0) !== s.last.roundEnd[i].wall) return null;
+  }
+  return B;
+}
+
+// Sound needs one tap on iOS, so a fresh link asks before playing.
+function offerWatch(seq) {
+  if (!seq) return;
+  if (sfx.ready() || sfx.muted || RM) { animateTurn(seq); return; }
+  const C = seq.C, who = C.last ? esc(C.names[C.last.p]) : '';
+  const label = !seq.A && !seq.B ? 'See the final scoring'
+    : seq.A ? `Watch ${who}’s move${C.last.roundEnd ? ' + scoring' : ''}` : 'Watch the round scoring';
+  const m = document.createElement('div');
+  m.className = 'watch';
+  m.innerHTML = `<button class="btn" id="wgo">▶ ${label}</button><button class="muted" id="wskip">Skip</button>`;
+  document.body.appendChild(m);
+  m.querySelector('#wgo').onclick = () => { sfx.unlock(); m.remove(); animateTurn(seq); };
+  m.querySelector('#wskip').onclick = () => { m.remove(); lastSeq = seq; render(); };
+}
+
+// ---- game over: every wall, bonus by bonus, then the podium ----
+async function finalTally(s) {
+  if (busy) return;
+  busy = true;
+  skipping = RM;
+  const m = document.createElement('div');
+  m.className = 'tally';
+  m.innerHTML = `<div class="tsheet"><div class="kicker"><span>Final scoring</span><span id="thint">tap to skip</span></div><div id="tbody"></div></div>`;
+  document.body.appendChild(m);
+  const body = m.querySelector('#tbody');
+  try {
+    for (let i = 0; i < s.n; i++) {
+      const p = s.players[i], b = M.bonuses(p);
+      let sc = p.score - b.points;
+      fx.querySelectorAll('.float').forEach(e => e.remove());
+      let cells = '';
+      for (let w = 0; w < 25; w++) cells += tile(M.wallColor(Math.floor(w / 5), w % 5), p.wall[w] ? '' : 'faint', `data-tw="${w}"`);
+      body.innerHTML = `<div class="tname">${esc(s.names[i])}</div><div class="tscore"><span id="ts">${sc}</span></div>
+        <div class="twall">${cells}</div><div class="tlog" id="tlog"></div>`;
+      const ts = body.querySelector('#ts'), log = body.querySelector('#tlog');
+      anim(body, [{ opacity: 0, transform: 'translateX(40px)' }, { opacity: 1, transform: 'none' }], { duration: 320, easing: 'ease-out' });
+      await wait(650);
+      const groups = [
+        ...b.rowList.map(r => ({ cells: [0, 1, 2, 3, 4].map(c => r * 5 + c), pts: 2, text: `Row ${r + 1} complete`, base: 0 })),
+        ...b.colList.map(c => ({ cells: [0, 1, 2, 3, 4].map(r => r * 5 + c), pts: 7, text: `Column ${c + 1} complete`, base: 2 })),
+        ...b.colorList.map(k => ({ cells: [0, 1, 2, 3, 4].map(r => r * 5 + M.wallCol(r, k)), pts: 10, text: `All five ${COLOR_NAMES[k]}`, base: 4 })),
+      ];
+      if (!groups.length) { log.innerHTML = '<div>No bonuses</div>'; await wait(900); }
+      for (const g of groups) {
+        g.cells.forEach((w, j) => {
+          const el = q(body, `[data-tw="${w}"]`);
+          el.classList.add('lit');
+          anim(el, [
+            { transform: 'none', filter: 'brightness(1)' },
+            { transform: 'translateY(-10px) scale(1.18)', filter: 'brightness(1.6)' },
+            { transform: 'none', filter: 'brightness(1)' },
+          ], { duration: 440, delay: j * 75, easing: 'ease-out' });
+        });
+        sfx.arp(g.base);
+        buzz(15);
+        await wait(380);
+        floatText(ts, '+' + g.pts, 'bonus', 30);
+        countUp(ts, sc, sc + g.pts, 500);
+        sc += g.pts;
+        log.insertAdjacentHTML('beforeend', `<div>${g.text} <b>+${g.pts}</b></div>`);
+        await wait(700);
+        body.querySelectorAll('.lit').forEach(el => el.classList.remove('lit'));
+      }
+      ts.textContent = p.score;
+      await wait(800);
+    }
+    skipping = false;
+    const st = M.standings(s), win = M.winners(s);
+    const medal = ['🥇', '🥈', '🥉', '4'];
+    body.innerHTML = `<div class="tname" style="margin-bottom:14px">${win.length > 1 ? 'It’s a tie!' : esc(s.names[win[0]]) + ' wins!'}</div>
+      <div class="podium">${st.map((x, k) => `<div class="prow ${win.includes(x.i) ? 'win' : ''}" data-k="${k}" style="opacity:0">
+        <span class="medal">${win.includes(x.i) ? (win.length > 1 ? '🤝' : '👑') : medal[k]}</span><span>${esc(x.name)}</span><span class="pts">${x.score}</span></div>`).join('')}</div>
+      <button class="btn" id="tdone" style="width:100%;margin-top:18px;opacity:0">Done</button>`;
+    for (let k = st.length - 1; k >= 0; k--) {
+      const row = q(body, `[data-k="${k}"]`);
+      row.style.opacity = '';
+      anim(row, [{ opacity: 0, transform: 'translateY(16px) scale(.95)' }, { opacity: 1, transform: 'none' }], { duration: 380, easing: 'cubic-bezier(.3,1.5,.5,1)' });
+      if (k === 0) { sfx.fanfare(); confetti(); buzz(60); }
+      else sfx.pop();
+      await wait(k === 0 ? 300 : 550);
+    }
+  } finally {
+    busy = false; skipping = false;
+  }
+  m.querySelector('#thint').textContent = '';
+  const done = q(body, '#tdone');
+  if (done) { done.style.opacity = ''; done.onclick = () => m.remove(); }
+  else m.remove();
+  renderGame();
 }
 
 // ---- rendering ----
@@ -406,8 +989,10 @@ function renderNew() {
     crypto.getRandomValues(r);
     G = { state: M.newGame(names, r[0], r[1]), me: 0, hotseat: f.hotseat };
     store.set('mosaic:name', names[0]);
-    sel = null; pending = null; screen = 'game';
+    sel = null; pending = null; lastSeq = null; screen = 'game';
     saveGame(); render();
+    busy = true; phase = 'refill'; render();
+    playRefill(G.state).then(() => { busy = false; phase = null; render(); });
   };
 }
 
@@ -416,7 +1001,8 @@ function lineCells(L, r, big) {
   for (let j = 0; j < 5; j++) {
     if (j < 4 - r) { h += `<div class="${big ? 'slot' : 'ms'} blank"></div>`; continue; }
     const k = 4 - j; // distance from the wall; lines fill toward it
-    h += k < L.n ? tile(L.c, big ? 'slot' : 'ms') : `<div class="${big ? 'slot' : 'ms'} line"></div>`;
+    const at = `data-l="${r}-${k}"`;
+    h += k < L.n ? tile(L.c, big ? 'slot' : 'ms', at) : `<div class="${big ? 'slot' : 'ms'} line" ${at}></div>`;
   }
   return h;
 }
@@ -425,7 +1011,7 @@ function wallCells(p, r, big) {
   let h = '';
   for (let c = 0; c < 5; c++) {
     const col = M.wallColor(r, c);
-    h += tile(col, (big ? 'slot ' : 'ms ') + (p.wall[r * 5 + c] ? '' : 'faint'));
+    h += tile(col, (big ? 'slot ' : 'ms ') + (p.wall[r * 5 + c] ? '' : 'faint'), `data-w="${r * 5 + c}"`);
   }
   return h;
 }
@@ -434,9 +1020,9 @@ function miniBoard(s, i) {
   const p = s.players[i];
   let rows = '';
   for (let r = 0; r < 5; r++) rows += `<div class="mrow">${lineCells(p.lines[r], r, false)}<div class="ms gap"></div>${wallCells(p, r, false)}</div>`;
-  return `<div class="mini ${!s.over && i === s.cur ? 'active' : ''}">
-    <div class="mhead"><span>${esc(s.names[i])}</span><b>${p.score}</b></div>${rows}
-    <div class="mfloor">${p.floor.map(t => tile(t, 'ms')).join('')}</div></div>`;
+  return `<div class="mini ${!s.over && i === s.cur ? 'active' : ''}" data-p="${i}">
+    <div class="mhead"><span>${esc(s.names[i])}</span><b data-score>${p.score}</b></div>${rows}
+    <div class="mfloor">${p.floor.map((t, k) => tile(t, 'ms', `data-f="${k}"`)).join('')}</div></div>`;
 }
 
 function bigBoard(s, i, canSel) {
@@ -450,11 +1036,11 @@ function bigBoard(s, i, canSel) {
   let floor = '';
   for (let k = 0; k < 7; k++) {
     const t = p.floor[k];
-    floor += `<div class="fslot">${t === undefined ? '<div class="slot line"></div>' : tile(t, 'slot')}<div class="pen">${M.FLOOR_PEN[k]}</div></div>`;
+    floor += `<div class="fslot">${t === undefined ? `<div class="slot line" data-f="${k}"></div>` : tile(t, 'slot', `data-f="${k}"`)}<div class="pen">${M.FLOOR_PEN[k]}</div></div>`;
   }
   const label = G.hotseat || G.me === i ? (G.hotseat ? esc(s.names[i]) : 'You') : esc(s.names[i]);
-  return `<div class="card board">
-    <div class="bhead"><div class="bname">${label}</div><div class="score">${p.score}</div></div>
+  return `<div class="card board" data-p="${i}">
+    <div class="bhead"><div class="bname">${label}</div><div class="score" data-score>${p.score}</div></div>
     ${rows}
     <div class="floor ${canSel ? 'can' : ''}" ${canSel ? `data-row="${M.DST_FLOOR}"` : ''}>${floor}</div></div>`;
 }
@@ -463,17 +1049,19 @@ function factoriesHtml(s, interactive) {
   const fx = s.factories.map((f, i) => {
     const tiles = [];
     f.forEach((n, c) => { for (let k = 0; k < n; k++) tiles.push(c); });
+    let hop = 0;
     const inner = tiles.map(c => {
       const on = sel && sel.src === i && sel.c === c, dim = sel && sel.src === i && sel.c !== c;
-      return `<button class="t t${c} pick ${on ? 'on' : ''} ${dim ? 'dim' : ''}" ${interactive ? `data-src="${i}" data-c="${c}"` : ''} aria-label="${COLOR_NAMES[c]}"></button>`;
+      return `<button class="t t${c} pick ${on ? 'on' : ''} ${dim ? 'dim' : ''}" data-tile="f${i}-${c}" ${on ? `style="--i:${hop++}"` : ''} ${interactive ? `data-src="${i}" data-c="${c}"` : ''} aria-label="${COLOR_NAMES[c]}"></button>`;
     }).join('');
     return `<div class="factory ${tiles.length ? '' : 'empty'}"><span class="num">${i + 1}</span>${inner}</div>`;
   }).join('');
   const ctiles = [];
   s.center.forEach((n, c) => { for (let k = 0; k < n; k++) ctiles.push(c); });
-  const cinner = (s.centerMarker ? tile(M.MARKER) : '') + ctiles.map(c => {
+  let hop = 0;
+  const cinner = (s.centerMarker ? tile(M.MARKER, '', 'data-tile="cm"') : '') + ctiles.map(c => {
     const on = sel && sel.src === M.SRC_CENTER && sel.c === c, dim = sel && sel.src === M.SRC_CENTER && sel.c !== c;
-    return `<button class="t t${c} pick ${on ? 'on' : ''} ${dim ? 'dim' : ''}" ${interactive ? `data-src="${M.SRC_CENTER}" data-c="${c}"` : ''} aria-label="${COLOR_NAMES[c]}"></button>`;
+    return `<button class="t t${c} pick ${on ? 'on' : ''} ${dim ? 'dim' : ''}" data-tile="c-${c}" ${on ? `style="--i:${hop++}"` : ''} ${interactive ? `data-src="${M.SRC_CENTER}" data-c="${c}"` : ''} aria-label="${COLOR_NAMES[c]}"></button>`;
   }).join('');
   return `<div class="factories">${fx}</div><div class="center"><div class="label">Center</div>${cinner || '<span class="muted" style="font-size:13px">empty</span>'}</div>`;
 }
@@ -492,36 +1080,46 @@ function summaryHtml(s) {
 
 function statusHtml(s) {
   let big;
-  if (s.over) {
+  const mover = s.last && (s.last.p === G.me && !G.hotseat ? 'You' : esc(s.names[s.last.p]));
+  if (phase === 'move') big = `${mover} ${mover === 'You' ? 'play' : 'plays'}…`;
+  else if (phase === 'score') big = `Round ${s.round} scoring`;
+  else if (phase === 'refill') big = `Round ${s.round}`;
+  else if (s.over) {
     const w = M.winners(s).map(i => s.names[i]);
     big = `🏆 ${esc(w.join(' & '))} ${w.length > 1 ? 'tie' : 'wins'}`;
   } else if (pending) big = 'Check your move';
   else if (myTurn()) big = G.hotseat ? `${esc(s.names[s.cur])}'s turn` : 'Your turn';
   else big = `Waiting for ${esc(s.names[s.cur])}`;
-  const last = moveText(pending || s);
+  const last = moveText(s);
   let extra = '';
   if (s.over) {
     extra = `<div class="summary">${M.standings(s).map((x, k) => `<div><span>${k + 1}. ${esc(x.name)}</span><b>${x.score}</b></div>`).join('')}</div>`;
   }
-  return `<div class="card status"><div class="big">${big}</div>${last ? `<div class="last">${pending ? 'You: ' : ''}${esc(last)}</div>` : ''}
-    ${summaryHtml(pending || s)}${extra}</div>`;
+  let btn = '';
+  if (!busy && lastSeq && lastSeq.C === (pending || G.state)) btn = `<button class="replay" id="replay">↻ Replay</button>`;
+  else if (!busy && s.over) btn = `<button class="replay" id="tallybtn">▶ Final scoring</button>`;
+  return `<div class="card status">${btn}<div class="big">${big}</div>${last ? `<div class="last">${pending && !busy ? 'You: ' : ''}${esc(last)}</div>` : ''}
+    ${summaryHtml(s)}${extra}</div>`;
 }
 
 function renderGame() {
-  const s = pending || G.state;
+  const s = view || pending || G.state;
   const vi = viewIdx();
   const interactive = myTurn();
   const others = s.players.map((_, i) => i).filter(i => i !== vi);
   app.innerHTML = `
     <div class="topbar"><button class="back" id="back">‹ Games</button>
-      <span class="muted" style="font-size:13px">${s.over ? 'Final' : 'Round ' + s.round} · move ${s.turn}</span></div>
+      <span class="row" style="gap:12px"><span class="muted" style="font-size:13px">${s.over ? 'Final' : 'Round ' + s.round} · move ${s.turn}</span>
+      <button id="mute" aria-label="Sound" style="font-size:17px">${sfx.muted ? '🔇' : '🔊'}</button></span></div>
     ${statusHtml(s)}
     <div class="opps" style="grid-template-columns:repeat(${others.length},1fr)">${others.map(i => miniBoard(s, i)).join('')}</div>
     <div class="card"><div class="kicker"><span>Factories</span>${G.state.bag ? `<span>bag ${G.state.bag.reduce((a, b) => a + b, 0)}</span>` : ''}</div>${factoriesHtml(s, interactive)}</div>
     ${bigBoard(s, vi, interactive && !!sel)}`;
 
   let b;
-  if (pending) {
+  if (busy) {
+    b = `<div class="grow muted">Tap anywhere to skip</div>`;
+  } else if (pending) {
     b = `<button class="btn ghost" id="undo">Undo</button><button class="btn grow" id="send">${G.hotseat ? 'Done — next player' : 'Send move'}</button>`;
   } else if (s.over) {
     b = `<button class="btn ghost grow" id="sharelink">Share result</button><button class="btn grow" id="again">New game</button>`;
@@ -537,7 +1135,7 @@ function renderGame() {
   }
   bar(b);
 
-  app.querySelector('#back').onclick = () => { screen = 'home'; sel = null; pending = null; render(); };
+  app.querySelector('#back').onclick = () => { screen = 'home'; sel = null; pending = null; lastSeq = null; render(); };
   app.querySelectorAll('[data-src]').forEach(el => el.onclick = () => pickTile(+el.dataset.src, +el.dataset.c));
   app.querySelectorAll('[data-row]').forEach(el => el.onclick = () => placeRow(+el.dataset.row));
   const on = (id, fn) => { const el = document.getElementById(id); if (el) el.onclick = fn; };
@@ -546,6 +1144,9 @@ function renderGame() {
   on('cancel', () => { sel = null; render(); });
   on('sharelink', share);
   on('paste', askPaste);
+  on('mute', () => { sfx.toggle(); render(); });
+  on('replay', () => animateTurn(lastSeq));
+  on('tallybtn', () => finalTally(G.state));
   on('again', () => { newForm.names = G.state.names.slice(); newForm.n = G.state.n; screen = 'new'; render(); });
 }
 
