@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1e1e2e">
+<meta property="og:title" content="Chess — your move">
+<meta property="og:description" content="Tap to open the game">
+<title>Chess</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+:root {
+  --bg: #1e1e2e; --mantle: #181825; --crust: #11111b;
+  --surface: #313244; --surface2: #45475a; --overlay: #6c7086;
+  --text: #cdd6f4; --sub: #a6adc8; --peach: #fab387; --green: #a6e3a1; --red: #f38ba8;
+  --light: #dee3ef; --dark: #7d87a8;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body { font: 15px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, system-ui, sans-serif; overscroll-behavior: none; }
+button { font: inherit; color: inherit; border: 0; background: none; padding: 0; cursor: pointer; touch-action: manipulation; }
+#app { max-width: 480px; margin: 0 auto; padding: max(12px, env(safe-area-inset-top)) 16px calc(96px + env(safe-area-inset-bottom)); }
+
+.card { background: var(--surface); border-radius: 16px; padding: 14px; margin-bottom: 12px; }
+.kicker { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--sub); margin-bottom: 8px; }
+.btn { background: var(--peach); color: var(--crust); font-weight: 650; border-radius: 12px; padding: 12px 16px; }
+.btn.alt { background: var(--surface2); color: var(--text); }
+.btn.small { padding: 7px 12px; font-size: 13px; border-radius: 10px; }
+.row { display: flex; gap: 10px; align-items: center; }
+.grow { flex: 1; }
+.muted { color: var(--sub); }
+
+/* board */
+.board { display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr); width: 100%; aspect-ratio: 1; border-radius: 10px; overflow: hidden;
+         box-shadow: 0 6px 24px rgba(0,0,0,.35); user-select: none; -webkit-user-select: none; }
+.sq { position: relative; display: grid; place-items: center; aspect-ratio: 1; min-width: 0; }
+.sq.l { background: var(--light); }
+.sq.d { background: var(--dark); }
+.sq.last::before { content: ""; position: absolute; inset: 0; background: rgba(250,179,135,.5); }
+.sq.sel::before { content: ""; position: absolute; inset: 0; background: rgba(250,179,135,.85); }
+.sq.check::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle, #f38ba8 0%, rgba(243,139,168,.6) 45%, transparent 75%); }
+.sq svg { width: 92%; height: 92%; position: relative; pointer-events: none; }
+.sq .dot { position: absolute; width: 30%; height: 30%; border-radius: 50%; background: rgba(17,17,27,.35); }
+.sq .ring { position: absolute; inset: 4%; border-radius: 50%; box-shadow: inset 0 0 0 4px rgba(17,17,27,.38); }
+.sq .cf, .sq .cr { position: absolute; font-size: 10px; font-weight: 700; pointer-events: none; }
+.sq .cf { right: 3px; bottom: 1px; }
+.sq .cr { left: 3px; top: 1px; }
+.sq.l .cf, .sq.l .cr { color: var(--dark); }
+.sq.d .cf, .sq.d .cr { color: var(--light); }
+
+.player { display: flex; align-items: center; gap: 8px; padding: 8px 2px; min-height: 40px; }
+.player .name { font-weight: 650; }
+.player .turn { width: 10px; height: 10px; border-radius: 50%; background: var(--surface2); flex: none; }
+.player .turn.on { background: var(--peach); box-shadow: 0 0 0 3px rgba(250,179,135,.25); }
+.caps { display: flex; flex-wrap: wrap; align-items: center; }
+.caps svg { width: 18px; height: 18px; margin-right: -5px; }
+.caps .adv { margin-left: 8px; font-size: 13px; color: var(--sub); }
+
+.moves { display: flex; gap: 6px; overflow-x: auto; padding: 10px 2px 2px; scrollbar-width: none; font-variant-numeric: tabular-nums; }
+.moves::-webkit-scrollbar { display: none; }
+.moves span { white-space: nowrap; font-size: 14px; }
+.moves .n { color: var(--overlay); }
+.moves .cur { background: var(--surface2); border-radius: 6px; padding: 0 5px; }
+
+.status .big { font-size: 20px; font-weight: 700; }
+.status .last { color: var(--sub); margin-top: 4px; }
+.pill { font-size: 12px; padding: 3px 8px; border-radius: 999px; background: var(--surface2); white-space: nowrap; }
+.pill.go { background: var(--peach); color: var(--crust); font-weight: 650; }
+.bar { position: fixed; left: 0; right: 0; bottom: 0; background: rgba(24,24,37,.96); backdrop-filter: blur(10px);
+       border-top: 1px solid var(--surface); padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); }
+.bar .in { max-width: 448px; margin: 0 auto; display: flex; gap: 10px; align-items: center; min-height: 44px; }
+.chip { padding: 8px 10px; border-radius: 10px; background: var(--surface); font-size: 13px; color: var(--sub); }
+.chip.on { background: rgba(250,179,135,.2); color: var(--peach); box-shadow: inset 0 0 0 1px var(--peach); }
+.topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.back { color: var(--peach); font-size: 15px; }
+
+h1 { font-size: 34px; margin: 18px 0 2px; letter-spacing: -.02em; }
+.game-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; }
+.seg { display: flex; background: var(--mantle); border-radius: 10px; padding: 3px; }
+.seg button { flex: 1; padding: 8px; border-radius: 8px; color: var(--sub); }
+.seg button.on { background: var(--surface2); color: var(--text); font-weight: 650; }
+input[type=text], textarea { width: 100%; background: var(--mantle); color: var(--text); border: 1px solid var(--surface2); border-radius: 10px; padding: 11px 12px; font: inherit; font-size: 16px; }
+textarea { min-height: 110px; resize: vertical; }
+label.check { display: flex; gap: 10px; align-items: center; margin-top: 12px; }
+.stack { display: grid; gap: 8px; }
+.modal { position: fixed; inset: 0; background: rgba(17,17,27,.75); display: grid; place-items: end center; z-index: 10; }
+.modal .sheet { background: var(--surface); width: 100%; max-width: 480px; border-radius: 20px 20px 0 0; padding: 20px 16px calc(20px + env(safe-area-inset-bottom)); }
+.promo { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.promo button { background: var(--light); border-radius: 12px; aspect-ratio: 1; display: grid; place-items: center; }
+.promo svg { width: 80%; height: 80%; }
+.toast { position: fixed; left: 50%; top: max(16px, env(safe-area-inset-top)); transform: translateX(-50%); background: var(--crust); color: var(--text);
+         padding: 10px 14px; border-radius: 12px; z-index: 20; box-shadow: 0 6px 24px rgba(0,0,0,.4); max-width: 90vw; font-size: 14px; }
+.how { font-size: 13px; color: var(--sub); }
+.how b { color: var(--text); }
+.credit { font-size: 11px; color: var(--overlay); text-align: center; margin-top: 18px; }
+.credit a { color: inherit; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="pieces.js"></script>
+<script src="engine.js"></script>
+<script>
+'use strict';
+const C = window.Chess;
+const app = document.getElementById('app');
+const VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+const COLOR_WORD = ['White', 'Black'];
+
+const store = {
+  get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  del(k) { try { localStorage.removeItem(k); } catch {} },
+  keys() { try { return Object.keys(localStorage); } catch { return []; } },
+};
+const gkey = id => 'chess:g:' + id;
+
+let screen = 'home';
+let G = null;        // { game, me: 0 white | 1 black, hotseat }
+let sel = null;      // selected square
+let pending = null;  // game after this turn's move, not yet sent
+let offerDraw = false;
+let newForm = { me: store.get('mosaic:name') || '', them: '', color: 'random', hotseat: false };
+
+function saveGame() {
+  if (!G) return;
+  store.set(gkey(G.game.id), { code: C.encode(G.game), me: G.me, hotseat: G.hotseat, updated: Date.now() });
+  store.set('chess:open', G.game.id);
+}
+function loadGame(id) {
+  const r = store.get(gkey(id));
+  if (!r) return null;
+  try { return { game: C.decode(r.code), me: r.me, hotseat: !!r.hotseat }; } catch { return null; }
+}
+function listGames() {
+  return store.keys().filter(k => k.startsWith('chess:g:'))
+    .map(k => { const r = store.get(k); try { return { g: C.decode(r.code), me: r.me, hotseat: r.hotseat, updated: r.updated }; } catch { return null; } })
+    .filter(Boolean).sort((a, b) => b.updated - a.updated);
+}
+
+const esc = s => String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+const pieceSvg = p => window.PIECES[(C.colorOf(p) === 'w' ? 'w' : 'b') + p.toUpperCase()];
+const baseUrl = () => location.origin + location.pathname;
+const linkFor = g => baseUrl() + '#c=' + C.encode(g);
+const sideIdx = c => (c === 'w' ? 0 : 1);
+
+function toast(msg) {
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3200);
+}
+
+// ---- derived state ----
+const shown = () => pending || G.game;
+let cache = { key: null, r: null };
+function R(g = shown()) {
+  const key = C.encode(g);
+  if (cache.key !== key) cache = { key, r: C.replay(g) };
+  return cache.r;
+}
+const toMove = g => sideIdx(R(g).pos.turn);
+function myTurn() {
+  const r = R(G.game);
+  return r.status === 'playing' && !pending && (G.hotseat || G.me === toMove(G.game));
+}
+
+function resultText(g) {
+  const r = R(g);
+  if (r.status !== 'over') return '';
+  if (!r.winner) return `Draw — ${r.reason}`;
+  const w = g.names[sideIdx(r.winner)];
+  if (r.reason === 'resignation') return `${g.names[1 - sideIdx(r.winner)]} resigned — ${w} wins`;
+  return `Checkmate — ${w} wins`;
+}
+
+function lastText(g) {
+  const r = R(g);
+  if (!g.moves.length) return '';
+  const who = g.names[(g.moves.length - 1) % 2];
+  return `${who} played ${r.sans[r.sans.length - 1]}`;
+}
+
+function shareText(g) {
+  const r = R(g);
+  if (r.status === 'over') return `Chess: ${resultText(g)}.`;
+  const offer = g.offer ? ` ${g.names[g.offer - 1]} offers a draw.` : '';
+  return `Chess · move ${Math.ceil(g.moves.length / 2)}: ${lastText(g)}.${offer} Your move, ${g.names[toMove(g)]}.`;
+}
+
+// ---- links ----
+function ingest(code) {
+  let g;
+  try { g = C.decode(code); } catch (e) { toast(e.message); return false; }
+  const prev = loadGame(g.id);
+  if (prev && C.seq(prev.game) > C.seq(g)) {
+    G = prev;
+    toast(`That's an older link — you already have move ${prev.game.moves.length}`);
+  } else if (prev && C.seq(prev.game) === C.seq(g) && prev.game.offer === g.offer) {
+    G = prev;
+  } else {
+    G = { game: g, me: prev ? prev.me : null, hotseat: prev ? prev.hotseat : false };
+  }
+  sel = null; pending = null; offerDraw = false; screen = 'game';
+  saveGame();
+  render();
+  if (G.me == null && !G.hotseat) askWho();
+  return true;
+}
+
+function extractCode(text) {
+  const m = text.match(/[#&?]c=([A-Za-z0-9_-]+)/);
+  if (m) return m[1];
+  const raw = text.trim().match(/[A-Za-z0-9_-]{12,}/);
+  return raw ? raw[0] : null;
+}
+
+function share() {
+  const msg = shareText(G.game) + '\n' + linkFor(G.game);
+  if (navigator.share) navigator.share({ text: msg }).catch(e => { if (e.name !== 'AbortError') copyFallback(msg); });
+  else copyFallback(msg);
+}
+function copyFallback(msg) {
+  const done = () => toast('Link copied — paste it in your text thread');
+  if (navigator.clipboard) navigator.clipboard.writeText(msg).then(done, () => showLink(msg));
+  else showLink(msg);
+}
+
+// ---- actions ----
+function tapSquare(sq) {
+  if (!myTurn()) {
+    const r = R(G.game);
+    if (r.status === 'playing' && !pending) toast(`It's ${G.game.names[toMove(G.game)]}'s move`);
+    return;
+  }
+  const r = R(G.game);
+  const pc = r.pos.board[sq];
+  if (sel != null) {
+    const options = r.legal.filter(m => m.from === sel && m.to === sq);
+    if (options.length > 1) return askPromo(sel, sq);
+    if (options.length === 1) return doMove(sel, sq, null);
+  }
+  sel = pc && C.colorOf(pc) === r.pos.turn && sel !== sq ? sq : null;
+  render();
+}
+
+function doMove(from, to, promo) {
+  pending = C.playMove(G.game, from, to, promo);
+  sel = null;
+  offerDraw = false;
+  render();
+}
+
+function commit() {
+  G.game = { ...pending, offer: offerDraw ? sideIdx(R(G.game).pos.turn) + 1 : 0 };
+  pending = null; offerDraw = false;
+  saveGame();
+  if (!G.hotseat) share(); // inside the tap so the share sheet may open
+  render();
+}
+
+function acceptDraw() {
+  if (!confirm('Accept the draw? The game ends.')) return;
+  G.game = { ...G.game, result: 3, offer: 0 };
+  saveGame();
+  if (!G.hotseat) share();
+  render();
+}
+
+function resign() {
+  const side = toMove(G.game);
+  if (!confirm(`Resign as ${COLOR_WORD[side]}? ${G.game.names[1 - side]} wins.`)) return;
+  G.game = { ...G.game, result: side === 0 ? 1 : 2, offer: 0 };
+  saveGame();
+  if (!G.hotseat) share();
+  render();
+}
+
+// ---- modals ----
+function modal(html) {
+  const m = document.createElement('div');
+  m.className = 'modal';
+  m.innerHTML = `<div class="sheet">${html}</div>`;
+  m.addEventListener('click', e => { if (e.target === m) m.remove(); });
+  document.body.appendChild(m);
+  return m;
+}
+
+function askPromo(from, to) {
+  const color = R(G.game).pos.turn;
+  const m = modal(`<div class="kicker">Promote to</div><div class="promo">${['q', 'r', 'b', 'n'].map(t =>
+    `<button data-p="${t}">${pieceSvg(color === 'w' ? t.toUpperCase() : t)}</button>`).join('')}</div>`);
+  m.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { m.remove(); doMove(from, to, b.dataset.p); });
+}
+
+function askWho() {
+  const g = G.game;
+  const m = modal(`<div class="kicker">Who's on this phone?</div>
+    <div class="stack">${g.names.map((n, i) => `<button class="btn alt" data-i="${i}">${esc(n)} <span class="muted">· ${COLOR_WORD[i]}</span></button>`).join('')}
+    <button class="btn alt" data-i="hot">We're both on this one phone</button></div>`);
+  m.querySelectorAll('[data-i]').forEach(b => b.onclick = () => {
+    if (b.dataset.i === 'hot') G.hotseat = true;
+    else { G.me = +b.dataset.i; store.set('mosaic:name', g.names[G.me]); }
+    saveGame(); m.remove(); render();
+  });
+}
+
+function askPaste() {
+  const m = modal(`<div class="kicker">Paste a link</div>
+    <textarea id="paste" placeholder="Paste the whole message — the link is found automatically"></textarea>
+    <div class="row" style="margin-top:12px"><button class="btn alt grow" id="cancel">Cancel</button><button class="btn grow" id="go">Open</button></div>`);
+  m.querySelector('#cancel').onclick = () => m.remove();
+  m.querySelector('#go').onclick = () => {
+    const code = extractCode(m.querySelector('#paste').value);
+    if (!code) return toast('No game link found in that text');
+    if (ingest(code)) m.remove();
+  };
+  setTimeout(() => m.querySelector('#paste').focus(), 50);
+}
+
+function showLink(msg) {
+  const m = modal(`<div class="kicker">Copy this into your text thread</div><textarea readonly>${esc(msg)}</textarea>
+    <button class="btn" style="width:100%;margin-top:12px" id="ok">Done</button>`);
+  m.querySelector('textarea').select();
+  m.querySelector('#ok').onclick = () => m.remove();
+}
+
+function menu() {
+  const canResign = myTurn();
+  const m = modal(`<div class="stack">
+    <button class="btn alt" id="m-share">Send current link again</button>
+    ${canResign ? '<button class="btn alt" id="m-resign" style="color:var(--red)">Resign</button>' : ''}
+    <button class="btn alt" id="m-close">Close</button></div>`);
+  m.querySelector('#m-share').onclick = () => { m.remove(); share(); };
+  if (canResign) m.querySelector('#m-resign').onclick = () => { m.remove(); resign(); };
+  m.querySelector('#m-close').onclick = () => m.remove();
+}
+
+// ---- rendering ----
+function render() {
+  if (screen === 'home') renderHome();
+  else if (screen === 'new') renderNew();
+  else renderGame();
+}
+
+function bar(inner) {
+  let b = document.querySelector('.bar');
+  if (!inner) { if (b) b.remove(); return; }
+  if (!b) { b = document.createElement('div'); b.className = 'bar'; document.body.appendChild(b); }
+  b.innerHTML = `<div class="in">${inner}</div>`;
+}
+
+function renderHome() {
+  const games = listGames();
+  app.innerHTML = `
+    <div class="topbar"><a class="back" href="../">‹ Mosaic</a><div></div></div>
+    <h1 style="margin-top:0">Chess</h1>
+    <div class="muted" style="margin-bottom:18px">Played by text message</div>
+    <div class="row" style="margin-bottom:16px">
+      <button class="btn grow" id="new">New game</button>
+      <button class="btn alt grow" id="paste">Paste a link</button>
+    </div>
+    ${games.length ? `<div class="kicker">Games</div>` : ''}
+    ${games.map(x => {
+      const g = x.g, r = C.replay(g);
+      let st;
+      if (r.status === 'over') st = `<span class="pill">${r.winner ? esc(g.names[sideIdx(r.winner)]) + ' won' : 'Draw'}</span>`;
+      else if (x.hotseat || x.me === sideIdx(r.pos.turn)) st = `<span class="pill go">Your move</span>`;
+      else st = `<span class="pill">${esc(g.names[sideIdx(r.pos.turn)])}'s move</span>`;
+      return `<div class="card"><div class="row">
+        <button class="game-item grow" data-open="${g.id}">
+          <div class="grow"><div style="font-weight:600">${esc(g.names[0])} <span class="muted">vs</span> ${esc(g.names[1])}</div>
+          <div class="muted" style="font-size:13px">Move ${Math.ceil(g.moves.length / 2) || 1}${r.sans.length ? ' · ' + r.sans[r.sans.length - 1] : ''}</div></div>${st}
+        </button>
+        <button class="muted" data-del="${g.id}" aria-label="Remove" style="padding:6px 2px 6px 8px">✕</button></div></div>`;
+    }).join('')}
+    <div class="card how"><b>How it works.</b> Tap a piece to see where it can go. After each move, send the link to your opponent; they tap it and reply with theirs. The link holds every move, so an old link can't overwrite a newer one. Nothing is stored online.</div>
+    <div class="credit">Pieces: cburnett, <a href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a></div>`;
+  bar(null);
+  app.querySelector('#new').onclick = () => { screen = 'new'; render(); };
+  app.querySelector('#paste').onclick = askPaste;
+  app.querySelectorAll('[data-open]').forEach(b => b.onclick = () => {
+    G = loadGame(+b.dataset.open); sel = null; pending = null; screen = 'game'; render();
+    if (G.me == null && !G.hotseat) askWho();
+  });
+  app.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+    if (confirm('Remove this game from this phone? (Your opponent keeps their copy.)')) { store.del(gkey(b.dataset.del)); render(); }
+  });
+}
+
+function renderNew() {
+  const f = newForm;
+  app.innerHTML = `
+    <div class="topbar"><button class="back" id="back">‹ Games</button><div></div></div>
+    <h1 style="margin-top:0">New game</h1>
+    <div class="card">
+      <div class="stack">
+        <input type="text" id="n-me" maxlength="16" placeholder="Your name" value="${esc(f.me)}">
+        <input type="text" id="n-them" maxlength="16" placeholder="Opponent's name" value="${esc(f.them)}">
+      </div>
+      <div class="kicker" style="margin-top:14px">You play</div>
+      <div class="seg">${[['w', 'White'], ['random', 'Random'], ['b', 'Black']].map(([v, l]) => `<button data-c="${v}" class="${f.color === v ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <label class="check"><input type="checkbox" id="hot" ${f.hotseat ? 'checked' : ''}> Both on this one phone</label>
+    </div>`;
+  bar(`<button class="btn grow" id="start">Start game</button>`);
+  app.querySelector('#back').onclick = () => { screen = 'home'; render(); };
+  app.querySelector('#n-me').oninput = e => { f.me = e.target.value; };
+  app.querySelector('#n-them').oninput = e => { f.them = e.target.value; };
+  app.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { f.color = b.dataset.c; render(); });
+  app.querySelector('#hot').onchange = e => { f.hotseat = e.target.checked; };
+  document.getElementById('start').onclick = () => {
+    const me = f.me.trim() || 'You', them = f.them.trim() || 'Opponent';
+    const r = new Uint32Array(1);
+    crypto.getRandomValues(r);
+    const white = f.color === 'random' ? (r[0] & 1 ? 'w' : 'b') : f.color;
+    const names = white === 'w' ? [me, them] : [them, me];
+    G = { game: C.newGame(names[0], names[1], r[0]), me: white === 'w' ? 0 : 1, hotseat: f.hotseat };
+    store.set('mosaic:name', me);
+    sel = null; pending = null; screen = 'game';
+    saveGame(); render();
+    if (white === 'b' && !f.hotseat) toast(`You're Black — ${them} moves first. Send them the link.`);
+  };
+}
+
+function boardHtml(g, flip) {
+  const r = R(g);
+  const legalTo = sel != null ? r.legal.filter(m => m.from === sel) : [];
+  const kingInCheck = r.check ? r.pos.board.indexOf(r.pos.turn === 'w' ? 'K' : 'k') : -1;
+  let h = '';
+  for (let vr = 0; vr < 8; vr++) for (let vc = 0; vc < 8; vc++) {
+    const rank = flip ? vr : 7 - vr, file = flip ? 7 - vc : vc, sq = rank * 8 + file;
+    const pc = r.pos.board[sq];
+    const cls = ['sq', (rank + file) % 2 ? 'l' : 'd'];
+    if (r.last && (r.last.from === sq || r.last.to === sq)) cls.push('last');
+    if (sel === sq) cls.push('sel');
+    if (sq === kingInCheck) cls.push('check');
+    const target = legalTo.find(m => m.to === sq);
+    let inner = pc ? pieceSvg(pc) : '';
+    if (target) inner += pc || target.flag === 'e' ? '<div class="ring"></div>' : '<div class="dot"></div>';
+    if (vr === 7) inner += `<span class="cf">${'abcdefgh'[file]}</span>`;
+    if (vc === 0) inner += `<span class="cr">${rank + 1}</span>`;
+    h += `<div class="${cls.join(' ')}" data-sq="${sq}">${inner}</div>`;
+  }
+  return `<div class="board">${h}</div>`;
+}
+
+function playerHtml(g, side) {
+  const r = R(g);
+  const color = side === 0 ? 'w' : 'b';
+  const took = r.captured[color].slice().sort((a, b) => VALUE[C.typeOf(b)] - VALUE[C.typeOf(a)]);
+  const mine = took.reduce((a, p) => a + VALUE[C.typeOf(p)], 0);
+  const theirs = r.captured[color === 'w' ? 'b' : 'w'].reduce((a, p) => a + VALUE[C.typeOf(p)], 0);
+  const adv = mine - theirs;
+  const on = r.status === 'playing' && r.pos.turn === color;
+  return `<div class="player"><div class="turn ${on ? 'on' : ''}"></div>
+    <div class="name">${esc(g.names[side])}</div><span class="muted" style="font-size:12px">${COLOR_WORD[side]}</span>
+    <div class="caps grow" style="justify-content:flex-end">${took.map(pieceSvg).join('')}${adv > 0 ? `<span class="adv">+${adv}</span>` : ''}</div></div>`;
+}
+
+function movesHtml(g) {
+  const sans = R(g).sans;
+  if (!sans.length) return '';
+  let h = '';
+  sans.forEach((s, i) => {
+    if (i % 2 === 0) h += `<span class="n">${i / 2 + 1}.</span>`;
+    h += `<span class="${i === sans.length - 1 ? 'cur' : ''}">${esc(s)}</span>`;
+  });
+  return `<div class="moves" id="moves">${h}</div>`;
+}
+
+function statusHtml() {
+  const g = shown(), r = R(g);
+  let big, sub = lastText(g), extra = '';
+  if (r.status === 'over') big = resultText(g);
+  else if (pending) { big = 'Check your move'; sub = 'You played ' + r.sans[r.sans.length - 1]; }
+  else if (myTurn()) {
+    big = G.hotseat ? `${esc(g.names[toMove(g)])} to move` : 'Your move';
+    if (r.check) big += ' — check!';
+  } else big = `Waiting for ${esc(g.names[toMove(g)])}`;
+  if (!pending && r.status === 'playing' && g.offer && g.offer - 1 !== toMove(g) && myTurn()) {
+    extra = `<div class="row" style="margin-top:10px"><div class="grow">${esc(g.names[g.offer - 1])} offers a draw. Move to decline.</div>
+      <button class="btn small" id="accept">Accept draw</button></div>`;
+  } else if (!pending && g.offer && r.status === 'playing' && !myTurn()) {
+    extra = `<div class="muted" style="margin-top:6px">Draw offered — waiting for an answer.</div>`;
+  }
+  return `<div class="card status"><div class="big">${big}</div>${sub ? `<div class="last">${esc(sub)}</div>` : ''}${extra}</div>`;
+}
+
+function renderGame() {
+  const g = shown(), r = R(g);
+  // Your side at the bottom; on one phone, the side to move.
+  const bottom = G.hotseat ? toMove(G.game) : (G.me ?? 0);
+  const flip = bottom === 1;
+  app.innerHTML = `
+    <div class="topbar"><button class="back" id="back">‹ Games</button>
+      <button class="muted" id="menu" aria-label="Menu" style="font-size:20px;padding:0 4px">⋯</button></div>
+    ${statusHtml()}
+    ${playerHtml(g, 1 - bottom)}
+    ${boardHtml(g, flip)}
+    ${playerHtml(g, bottom)}
+    ${movesHtml(g)}`;
+  const mv = document.getElementById('moves');
+  if (mv) mv.scrollLeft = mv.scrollWidth;
+
+  let b;
+  if (pending) {
+    b = `<button class="btn alt" id="undo">Undo</button>
+      ${G.hotseat ? '' : `<button class="chip ${offerDraw ? 'on' : ''}" id="offer">½ Offer draw</button>`}
+      <button class="btn grow" id="send">${G.hotseat ? 'Done' : 'Send move'}</button>`;
+  } else if (r.status === 'over') {
+    b = `<button class="btn alt grow" id="sharelink">Share result</button><button class="btn grow" id="again">Rematch</button>`;
+  } else if (myTurn()) {
+    b = `<div class="grow muted">${sel != null ? 'Tap a highlighted square' : 'Tap a piece to see its moves'}</div>`;
+  } else if (G.game.moves.length && (G.game.moves.length - 1) % 2 === G.me) {
+    b = `<div class="grow muted">Sent? If not:</div><button class="btn small" id="sharelink">Send link again</button>`;
+  } else {
+    b = `<div class="grow muted">Tap ${esc(g.names[toMove(g)])}'s link when it arrives</div><button class="btn alt small" id="paste">Paste</button>`;
+  }
+  bar(b);
+
+  app.querySelector('#back').onclick = () => { screen = 'home'; sel = null; pending = null; render(); };
+  app.querySelector('#menu').onclick = menu;
+  app.querySelectorAll('[data-sq]').forEach(el => el.onclick = () => tapSquare(+el.dataset.sq));
+  const on = (id, fn) => { const el = document.getElementById(id); if (el) el.onclick = fn; };
+  on('undo', () => { pending = null; offerDraw = false; render(); });
+  on('offer', () => { offerDraw = !offerDraw; render(); });
+  on('send', commit);
+  on('accept', acceptDraw);
+  on('sharelink', share);
+  on('paste', askPaste);
+  on('again', () => {
+    // Rematch: swap colors.
+    const me = G.hotseat ? G.game.names[0] : G.game.names[G.me ?? 0];
+    const them = G.hotseat ? G.game.names[1] : G.game.names[1 - (G.me ?? 0)];
+    newForm = { me, them, color: G.me === 0 ? 'b' : 'w', hotseat: G.hotseat };
+    screen = 'new'; render();
+  });
+}
+
+// ---- boot ----
+function boot() {
+  const code = extractCode(location.hash);
+  if (code) {
+    history.replaceState(null, '', location.pathname);
+    if (ingest(code)) return;
+  }
+  let reload = false;
+  try { reload = !!sessionStorage.getItem('chess:seen'); sessionStorage.setItem('chess:seen', '1'); } catch {}
+  const open = store.get('chess:open');
+  if (open != null && reload) {
+    G = loadGame(open);
+    if (G) { screen = 'game'; render(); return; }
+  }
+  screen = 'home';
+  render();
+}
+window.addEventListener('hashchange', () => { const c = extractCode(location.hash); if (c) { history.replaceState(null, '', location.pathname); ingest(c); } });
+boot();
+</script>
+</body>
+</html>
