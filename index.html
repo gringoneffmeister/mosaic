@@ -168,6 +168,7 @@ label.check { display: flex; gap: 10px; align-items: center; margin-top: 12px; }
 </head>
 <body>
 <div id="app"></div>
+<script src="sfx.js"></script>
 <script src="engine.js"></script>
 <script>
 'use strict';
@@ -386,98 +387,10 @@ const fx = document.createElement('div');
 fx.className = 'fx';
 document.body.appendChild(fx);
 
-// ---- sound: synthesized with WebAudio, no audio files ----
-const sfx = (() => {
-  let ctx = null, out = null, noise = null;
-  let muted = store.get('mosaic:mute') === true;
-  function ac() {
-    if (ctx) return ctx;
-    const C = window.AudioContext || window.webkitAudioContext;
-    if (!C) return null;
-    ctx = new C();
-    out = ctx.createGain();
-    out.gain.value = 0.6;
-    out.connect(ctx.destination);
-    noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
-    const d = noise.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    return ctx;
-  }
-  const live = () => !muted && !skipping && ctx && ctx.state === 'running';
-  const now = (dt = 0) => ctx.currentTime + Math.max(0, dt);
-  function env(g, t, peak, a, d) {
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(peak, t + a);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + a + d);
-  }
-  function tone(type, f, t, peak, a, d, f2) {
-    const o = ctx.createOscillator(), g = ctx.createGain();
-    o.type = type;
-    o.frequency.setValueAtTime(f, t);
-    if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + a + d);
-    env(g, t, peak, a, d);
-    o.connect(g).connect(out);
-    o.start(t);
-    o.stop(t + a + d + 0.05);
-  }
-  function hiss(t, freq, q, peak, d, f2, type = 'bandpass') {
-    const n = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
-    n.buffer = noise;
-    f.type = type;
-    f.frequency.setValueAtTime(freq, t);
-    f.Q.value = q;
-    if (f2) f.frequency.exponentialRampToValueAtTime(f2, t + d);
-    env(g, t, peak, 0.002, d);
-    n.connect(f).connect(g).connect(out);
-    n.start(t, Math.random() * 0.5);
-    n.stop(t + d + 0.05);
-  }
-  const PENTA = [523.25, 587.33, 659.25, 783.99, 880, 1046.5, 1174.66, 1318.51, 1567.98, 1760, 2093, 2349.32];
-  return {
-    unlock() { const c = ac(); if (c && c.state !== 'running') c.resume().catch(() => {}); },
-    ready: () => !!ctx && ctx.state === 'running',
-    get muted() { return muted; },
-    toggle() { muted = !muted; store.set('mosaic:mute', muted); if (!muted) this.unlock(); },
-    // Ceramic clack: a tile set down on a tile.
-    clack(dt = 0, pitch = 1, vol = 1) {
-      if (!live()) return;
-      const t = now(dt), f = 2600 * pitch * (0.92 + Math.random() * 0.16);
-      hiss(t, f, 4, 0.5 * vol, 0.045);
-      tone('triangle', f / 2.7, t, 0.22 * vol, 0.002, 0.06);
-    },
-    pick(n) { for (let i = 0; i < n; i++) this.clack(i * 0.05, 1.25, 0.6); },
-    chime(step, dt = 0, vol = 1) {
-      if (!live()) return;
-      const t = now(dt), f = PENTA[Math.max(0, Math.min(step, PENTA.length - 1))];
-      tone('sine', f, t, 0.28 * vol, 0.005, 0.9);
-      tone('sine', f * 2.01, t, 0.07 * vol, 0.005, 0.45);
-      tone('triangle', f * 3, t, 0.03 * vol, 0.002, 0.15);
-    },
-    thud(dt = 0) {
-      if (!live()) return;
-      const t = now(dt);
-      tone('sine', 150, t, 0.5, 0.005, 0.28, 55);
-      hiss(t, 500, 0.7, 0.25, 0.12, 0, 'lowpass');
-    },
-    whoosh(dt = 0) { if (live()) hiss(now(dt), 350, 1.2, 0.22, 0.4, 2600); },
-    pop(dt = 0) { if (live()) tone('sine', 500, now(dt), 0.2, 0.004, 0.09, 1100); },
-    arp(base, dt = 0) { for (let i = 0; i < 4; i++) this.chime(base + i * 2, dt + i * 0.07, 0.8); },
-    fanfare(dt = 0) {
-      if (!live()) return;
-      [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
-        const t = now(dt + i * 0.13), hold = i === 3 ? 1.2 : 0.25;
-        tone('triangle', f, t, 0.22, 0.01, hold);
-        tone('sine', f * 2, t, 0.06, 0.01, hold * 0.7);
-      });
-      for (let i = 0; i < 8; i++) this.chime(6 + (i % 5), dt + 0.55 + i * 0.06, 0.35);
-    },
-  };
-})();
-// iOS only lets audio start inside a tap.
-['touchend', 'click', 'keydown'].forEach(ev => document.addEventListener(ev, () => sfx.unlock(), { capture: true }));
-const buzz = ms => {
-  try { if (!sfx.muted && navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) navigator.vibrate(ms); } catch {}
-};
+// ---- sound: shared with Chess (sfx.js) ----
+const sfx = window.Sfx;
+sfx.setQuiet(() => skipping);
+const buzz = sfx.buzz;
 
 // A tap during an animation skips it (and is swallowed so it can't make a move).
 document.addEventListener('click', e => {
@@ -498,15 +411,21 @@ function wait(ms) {
 function anim(el, frames, opts) {
   if (!el) return Promise.resolve();
   const a = el.animate(frames, opts);
-  if (skipping) a.finish();
-  running.add(a);
-  return a.finished.catch(() => {}).finally(() => running.delete(a));
+  return new Promise(res => {
+    const done = () => { clearTimeout(t); running.delete(done); res(); };
+    // Watchdog: a page that stops painting never fires `finished`; don't let that lock input.
+    const t = setTimeout(() => { try { a.finish(); } catch {} done(); }, (opts.delay || 0) + opts.duration + 800);
+    done.anim = a;
+    running.add(done);
+    a.finished.then(done, done);
+    if (skipping) { try { a.finish(); } catch {} done(); }
+  });
 }
 function skipAnim() {
   if (!busy || skipping) return;
   skipping = true;
   [...waiters].forEach(f => f());
-  running.forEach(a => { try { a.finish(); } catch {} });
+  running.forEach(done => { try { done.anim.finish(); } catch {} done(); });
 }
 function stopAnim() {
   skipAnim();

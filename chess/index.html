@@ -94,10 +94,33 @@ label.check { display: flex; gap: 10px; align-items: center; margin-top: 12px; }
 .how b { color: var(--text); }
 .credit { font-size: 11px; color: var(--overlay); text-align: center; margin-top: 18px; }
 .credit a { color: inherit; }
+
+/* animation */
+.sq.sel svg { animation: lift .2s ease-out both; }
+@keyframes lift { to { transform: translateY(-6%) scale(1.12); filter: drop-shadow(0 6px 5px rgba(0,0,0,.35)); } }
+.sq .dot, .sq .ring { animation: popin .24s cubic-bezier(.3,1.6,.5,1) backwards; animation-delay: var(--d, 0ms); }
+@keyframes popin { from { transform: scale(0); opacity: 0; } }
+.sq.check::before { animation: throb .9s ease-in-out 3; }
+@keyframes throb { 50% { opacity: .4; } }
+.sq svg.fallen { transform: translateY(14%) rotate(90deg) scale(.86); filter: grayscale(.4) brightness(.85); }
+.caps { display: flex; }
+.fx { position: fixed; inset: 0; pointer-events: none; z-index: 30; overflow: hidden; }
+.fx > .ghost, .fx > .confetto { position: fixed; display: grid; place-items: center; }
+.fx > .ghost svg { width: 92%; height: 92%; }
+.fx > .confetto svg { width: 100%; height: 100%; }
+.banner { position: fixed; left: 0; right: 0; top: 40%; text-align: center; font-size: 42px; font-weight: 800; letter-spacing: -.02em; padding: 0 16px;
+          color: var(--peach); text-shadow: 0 4px 28px rgba(0,0,0,.85); white-space: pre; }
+.status { position: relative; }
+.replay { position: absolute; top: 14px; right: 14px; font-size: 13px; color: var(--peach); }
+.watch { position: fixed; inset: 0; z-index: 12; background: rgba(17,17,27,.55); display: grid; place-content: center; justify-items: center; gap: 16px; }
+.watch .btn { font-size: 18px; padding: 16px 22px; box-shadow: 0 10px 30px rgba(0,0,0,.5); animation: breathe 1.6s ease-in-out infinite; }
+@keyframes breathe { 50% { transform: scale(1.05); } }
+@media (prefers-reduced-motion: reduce) { .sq.sel svg, .sq .dot, .sq .ring, .sq.check::before, .watch .btn { animation: none; } }
 </style>
 </head>
 <body>
 <div id="app"></div>
+<script src="../sfx.js"></script>
 <script src="pieces.js"></script>
 <script src="engine.js"></script>
 <script>
@@ -153,7 +176,7 @@ function toast(msg) {
 }
 
 // ---- derived state ----
-const shown = () => pending || G.game;
+const shown = () => view || pending || G.game;
 let cache = { key: null, r: null };
 function R(g = shown()) {
   const key = C.encode(g);
@@ -163,7 +186,7 @@ function R(g = shown()) {
 const toMove = g => sideIdx(R(g).pos.turn);
 function myTurn() {
   const r = R(G.game);
-  return r.status === 'playing' && !pending && (G.hotseat || G.me === toMove(G.game));
+  return !busy && r.status === 'playing' && !pending && (G.hotseat || G.me === toMove(G.game));
 }
 
 function resultText(g) {
@@ -194,18 +217,24 @@ function ingest(code) {
   let g;
   try { g = C.decode(code); } catch (e) { toast(e.message); return false; }
   const prev = loadGame(g.id);
+  let seq = null;
+  stopAnim();
   if (prev && C.seq(prev.game) > C.seq(g)) {
     G = prev;
     toast(`That's an older link — you already have move ${prev.game.moves.length}`);
   } else if (prev && C.seq(prev.game) === C.seq(g) && prev.game.offer === g.offer) {
     G = prev;
   } else {
+    // The link holds every move, so the opponent's last move can always be replayed.
+    if (g.moves.length && !(prev && prev.game.moves.length === g.moves.length)) seq = { g0: { ...g, moves: g.moves.slice(0, -1), result: 0, offer: 0 }, g1: g };
+    else if (C.replay(g).status === 'over') seq = { g1: g };
     G = { game: g, me: prev ? prev.me : null, hotseat: prev ? prev.hotseat : false };
   }
-  sel = null; pending = null; offerDraw = false; screen = 'game';
+  sel = null; pending = null; offerDraw = false; lastSeq = null; screen = 'game';
   saveGame();
   render();
-  if (G.me == null && !G.hotseat) askWho();
+  if (G.me == null && !G.hotseat) askWho(() => offerWatch(seq));
+  else offerWatch(seq);
   return true;
 }
 
@@ -243,19 +272,21 @@ function tapSquare(sq) {
   }
   sel = pc && C.colorOf(pc) === r.pos.turn && sel !== sq ? sq : null;
   render();
+  if (sel != null) { sfx.tock(0, 1.5, 0.35); buzz(5); }
 }
 
 function doMove(from, to, promo) {
   pending = C.playMove(G.game, from, to, promo);
   sel = null;
   offerDraw = false;
-  render();
+  animateTurn({ g0: G.game, g1: pending }, true);
 }
 
 function commit() {
   G.game = { ...pending, offer: offerDraw ? sideIdx(R(G.game).pos.turn) + 1 : 0 };
   pending = null; offerDraw = false;
   saveGame();
+  sfx.whoosh();
   if (!G.hotseat) share(); // inside the tap so the share sheet may open
   render();
 }
@@ -266,6 +297,7 @@ function acceptDraw() {
   saveGame();
   if (!G.hotseat) share();
   render();
+  animateTurn({ g1: G.game });
 }
 
 function resign() {
@@ -275,6 +307,7 @@ function resign() {
   saveGame();
   if (!G.hotseat) share();
   render();
+  animateTurn({ g1: G.game });
 }
 
 // ---- modals ----
@@ -294,7 +327,7 @@ function askPromo(from, to) {
   m.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { m.remove(); doMove(from, to, b.dataset.p); });
 }
 
-function askWho() {
+function askWho(then) {
   const g = G.game;
   const m = modal(`<div class="kicker">Who's on this phone?</div>
     <div class="stack">${g.names.map((n, i) => `<button class="btn alt" data-i="${i}">${esc(n)} <span class="muted">· ${COLOR_WORD[i]}</span></button>`).join('')}
@@ -303,6 +336,7 @@ function askWho() {
     if (b.dataset.i === 'hot') G.hotseat = true;
     else { G.me = +b.dataset.i; store.set('mosaic:name', g.names[G.me]); }
     saveGame(); m.remove(); render();
+    if (then) then();
   });
 }
 
@@ -335,6 +369,233 @@ function menu() {
   m.querySelector('#m-share').onclick = () => { m.remove(); share(); };
   if (canResign) m.querySelector('#m-resign').onclick = () => { m.remove(); resign(); };
   m.querySelector('#m-close').onclick = () => m.remove();
+}
+
+// ---- animation + sound ----
+let view = null;      // game on screen while an animation runs (overrides pending / G.game)
+let phase = null;     // 'move' | 'end' while animating
+let busy = false;     // input locked; a tap skips to the end
+let skipping = false;
+let lastSeq = null;   // { g0?, g1 } — the last thing animated, for Replay
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const running = new Set();
+const waiters = new Set();
+const fx = document.createElement('div');
+fx.className = 'fx';
+document.body.appendChild(fx);
+const sfx = window.Sfx;
+sfx.setQuiet(() => skipping);
+const buzz = sfx.buzz;
+// Must match .sq svg.fallen in the CSS.
+const FALLEN = 'translateY(14%) rotate(90deg) scale(.86)', FALLEN_FILTER = 'grayscale(.4) brightness(.85)';
+
+// A tap during an animation skips it (and is swallowed so it can't make a move).
+document.addEventListener('click', e => {
+  if (!busy || e.target.closest('.watch')) return;
+  e.stopPropagation();
+  e.preventDefault();
+  skipAnim();
+}, true);
+
+function wait(ms) {
+  if (skipping) return Promise.resolve();
+  return new Promise(res => {
+    const done = () => { waiters.delete(done); clearTimeout(t); res(); };
+    const t = setTimeout(done, ms);
+    waiters.add(done);
+  });
+}
+function anim(el, frames, opts) {
+  if (!el) return Promise.resolve();
+  const a = el.animate(frames, opts);
+  return new Promise(res => {
+    const done = () => { clearTimeout(t); running.delete(done); res(); };
+    // Watchdog: a page that stops painting never fires `finished`; don't let that lock input.
+    const t = setTimeout(() => { try { a.finish(); } catch {} done(); }, (opts.delay || 0) + opts.duration + 800);
+    done.anim = a;
+    running.add(done);
+    a.finished.then(done, done);
+    if (skipping) { try { a.finish(); } catch {} done(); }
+  });
+}
+function skipAnim() {
+  if (!busy || skipping) return;
+  skipping = true;
+  [...waiters].forEach(f => f());
+  running.forEach(done => { try { done.anim.finish(); } catch {} done(); });
+}
+function stopAnim() {
+  skipAnim();
+  document.querySelectorAll('.watch').forEach(e => e.remove());
+}
+
+const q = (root, s) => (root ? root.querySelector(s) : null);
+const sqEl = sq => app.querySelector(`[data-sq="${sq}"]`);
+const pieceEl = sq => q(sqEl(sq), 'svg');
+const squash = el => anim(el, [{ transform: 'scale(1.18)' }, { transform: 'scale(.94)' }, { transform: 'none' }], { duration: 240, easing: 'ease-out' });
+
+function banner(text) {
+  if (skipping || RM) return;
+  const d = document.createElement('div');
+  d.className = 'banner';
+  d.textContent = text;
+  fx.appendChild(d);
+  anim(d, [
+    { transform: 'translateX(-60%) skewX(-12deg)', opacity: 0 },
+    { transform: 'translateX(0) skewX(0)', opacity: 1, offset: 0.2 },
+    { transform: 'translateX(0) scale(1.04)', opacity: 1, offset: 0.75 },
+    { transform: 'translateX(60%) skewX(12deg)', opacity: 0 },
+  ], { duration: 1500, easing: 'ease-in-out', fill: 'both' }).then(() => d.remove());
+}
+
+// A rain of chess pieces.
+function confetti(n = 60) {
+  if (RM) return;
+  const kinds = 'PNBRQKpnbrqk';
+  for (let i = 0; i < n; i++) {
+    const d = document.createElement('div');
+    const size = 20 + Math.random() * 18;
+    d.className = 'confetto';
+    d.innerHTML = pieceSvg(kinds[i % kinds.length]);
+    Object.assign(d.style, { left: Math.random() * innerWidth + 'px', top: '-50px', width: size + 'px', height: size + 'px' });
+    fx.appendChild(d);
+    const dx = (Math.random() - 0.5) * 180, rot = (Math.random() - 0.5) * 900;
+    d.animate([{ transform: 'translate(0,0) rotate(0deg)' }, { transform: `translate(${dx}px, ${innerHeight + 100}px) rotate(${rot}deg)` }],
+      { duration: 2000 + Math.random() * 1600, delay: Math.random() * 700, easing: 'cubic-bezier(.25,.6,.5,1)', fill: 'both' })
+      .finished.then(() => d.remove()).catch(() => {});
+  }
+}
+
+// The piece now on `to` glides in from `from`.
+function slide(from, to, dur, delay = 0) {
+  const sq = sqEl(to), el = q(sq, 'svg');
+  if (!el || skipping) return Promise.resolve();
+  const a = sqEl(from).getBoundingClientRect(), b = sq.getBoundingClientRect();
+  const lift = 'drop-shadow(0 8px 6px rgba(0,0,0,.35))';
+  sq.style.zIndex = 3;
+  return anim(el, [
+    { transform: `translate(${a.left - b.left}px, ${a.top - b.top}px) scale(1.12)`, filter: lift },
+    { transform: 'translate(0,0) scale(1.12)', filter: lift, offset: 0.85 },
+    { transform: 'none', filter: 'none' },
+  ], { duration: dur, delay, easing: 'cubic-bezier(.5,0,.3,1)', fill: 'backwards' }).then(() => { sq.style.zIndex = ''; });
+}
+
+async function playMove(g0, g1) {
+  const r0 = C.replay(g0), m = R(g1).last, us = r0.pos.turn;
+  const capSq = m.flag === 'e' ? m.to + (us === 'w' ? -8 : 8) : m.to;
+  const took = r0.pos.board[capSq];
+  view = g1; phase = 'move';
+  renderGame();
+  const a = sqEl(m.from).getBoundingClientRect(), b = sqEl(m.to).getBoundingClientRect();
+  // The captured piece waits on the fx layer until it gets hit.
+  let ghost = null;
+  if (took && !skipping) {
+    const cr = sqEl(capSq).getBoundingClientRect();
+    ghost = document.createElement('div');
+    ghost.className = 'ghost';
+    ghost.innerHTML = pieceSvg(took);
+    Object.assign(ghost.style, { left: cr.left + 'px', top: cr.top + 'px', width: cr.width + 'px', height: cr.height + 'px' });
+    fx.appendChild(ghost);
+  }
+  const dist = Math.hypot(a.left - b.left, a.top - b.top) / b.width;
+  const dur = Math.min(560, 230 + dist * 50);
+  const jobs = [slide(m.from, m.to, dur)];
+  if (m.flag === 'k') jobs.push(slide(m.from + 3, m.from + 1, dur, 110));
+  if (m.flag === 'q') jobs.push(slide(m.from - 4, m.from - 1, dur, 110));
+  if (ghost) {
+    await wait(dur * 0.75);
+    const tray = q(app, `.player[data-side="${sideIdx(us)}"] .caps`) || sqEl(capSq);
+    const t = tray.getBoundingClientRect(), g = ghost.getBoundingClientRect();
+    const dx = t.right - 12 - (g.left + g.width / 2), dy = t.top + t.height / 2 - (g.top + g.height / 2);
+    sfx.capture();
+    buzz(15);
+    anim(ghost, [
+      { transform: 'none', opacity: 1 },
+      { transform: `translate(${dx * 0.4 + (b.left - a.left) * 0.15}px, ${dy * 0.4 - 30}px) rotate(260deg) scale(.8)`, opacity: 1, offset: 0.45 },
+      { transform: `translate(${dx}px, ${dy}px) rotate(540deg) scale(.35)`, opacity: 0.2 },
+    ], { duration: 650, easing: 'cubic-bezier(.3,.1,.4,1)', fill: 'forwards' }).then(() => { ghost.remove(); squash(tray); });
+  }
+  await Promise.all(jobs);
+  if (!took) sfx.tock();
+  if (m.flag === 'k' || m.flag === 'q') sfx.tock(0.1, 0.9, 0.8);
+  buzz(8);
+  squash(pieceEl(m.to));
+  if (m.promo) {
+    anim(pieceEl(m.to), [
+      { transform: 'scale(.5)', filter: 'brightness(2.2) drop-shadow(0 0 10px #fab387)' },
+      { transform: 'scale(1.3)', filter: 'brightness(1.5) drop-shadow(0 0 10px #fab387)', offset: 0.5 },
+      { transform: 'none', filter: 'none' },
+    ], { duration: 600, easing: 'ease-out' });
+    sfx.arp(5);
+    await wait(500);
+  }
+}
+
+async function playEnd(g) {
+  const r = R(g);
+  phase = 'end';
+  renderGame();
+  if (r.winner) {
+    const lose = r.winner === 'w' ? 'b' : 'w';
+    const k = pieceEl(r.pos.board.indexOf(lose === 'w' ? 'K' : 'k'));
+    anim(k, [
+      { transform: 'none', filter: 'none' },
+      { transform: 'rotate(-14deg)', filter: 'none', offset: 0.35 },
+      { transform: 'translateY(4%) rotate(100deg) scale(.9)', filter: FALLEN_FILTER, offset: 0.8 },
+      { transform: FALLEN, filter: FALLEN_FILTER },
+    ], { duration: 950, easing: 'cubic-bezier(.55,0,.75,1.35)' });
+    await wait(750);
+    sfx.thud();
+    buzz(40);
+    anim(q(app, '.board'), [
+      { transform: 'none' }, { transform: 'translate(-5px, 2px) rotate(-.6deg)' }, { transform: 'translate(5px, -2px) rotate(.6deg)' },
+      { transform: 'translate(-3px, 1px)' }, { transform: 'none' },
+    ], { duration: 420 });
+    const iWon = G.hotseat || G.me === sideIdx(r.winner);
+    banner(r.reason === 'resignation' ? `${g.names[1 - sideIdx(r.winner)]} resigns` : 'Checkmate!');
+    if (iWon) { sfx.fanfare(0.25); confetti(); } else sfx.sad(0.25);
+  } else {
+    banner('Draw  ½–½');
+    sfx.draw();
+  }
+  await wait(1500);
+}
+
+// Plays one turn: the move (g0 → g1), then check or the game's end.
+// live: the mover just tapped, so g0 is already on screen.
+async function animateTurn(seq, live) {
+  if (!seq || busy) return;
+  lastSeq = seq;
+  busy = true;
+  skipping = RM;
+  try {
+    if (seq.g0) {
+      if (!live) { view = seq.g0; phase = 'move'; renderGame(); await wait(500); }
+      await playMove(seq.g0, seq.g1);
+      const r = R(seq.g1);
+      if (r.status === 'playing' && r.check) { sfx.check(0.05); banner('Check!'); await wait(600); }
+      else await wait(r.status === 'over' ? 350 : 120);
+    }
+    view = seq.g1;
+    if (R(seq.g1).status === 'over') { skipping = RM; await playEnd(seq.g1); }
+  } finally {
+    fx.querySelectorAll('.ghost').forEach(e => e.remove());
+    view = null; phase = null; busy = false; skipping = false;
+  }
+  renderGame();
+}
+
+// Sound needs one tap on iOS, so a fresh link asks before playing.
+function offerWatch(seq) {
+  if (!seq) return;
+  if (sfx.ready() || sfx.muted || RM) { animateTurn(seq); return; }
+  const g = seq.g1, who = esc(g.names[(g.moves.length - 1) % 2]);
+  const m = document.createElement('div');
+  m.className = 'watch';
+  m.innerHTML = `<button class="btn" id="wgo">▶ ${seq.g0 ? `Watch ${who}’s move` : 'See how it ended'}</button><button class="muted" id="wskip">Skip</button>`;
+  document.body.appendChild(m);
+  m.querySelector('#wgo').onclick = () => { sfx.unlock(); m.remove(); animateTurn(seq); };
+  m.querySelector('#wskip').onclick = () => { m.remove(); lastSeq = seq; render(); };
 }
 
 // ---- rendering ----
@@ -427,6 +688,7 @@ function boardHtml(g, flip) {
   const r = R(g);
   const legalTo = sel != null ? r.legal.filter(m => m.from === sel) : [];
   const kingInCheck = r.check ? r.pos.board.indexOf(r.pos.turn === 'w' ? 'K' : 'k') : -1;
+  const fallen = r.status === 'over' && r.winner && (!busy || phase === 'end') ? r.pos.board.indexOf(r.winner === 'w' ? 'k' : 'K') : -1;
   let h = '';
   for (let vr = 0; vr < 8; vr++) for (let vc = 0; vc < 8; vc++) {
     const rank = flip ? vr : 7 - vr, file = flip ? 7 - vc : vc, sq = rank * 8 + file;
@@ -437,7 +699,8 @@ function boardHtml(g, flip) {
     if (sq === kingInCheck) cls.push('check');
     const target = legalTo.find(m => m.to === sq);
     let inner = pc ? pieceSvg(pc) : '';
-    if (target) inner += pc || target.flag === 'e' ? '<div class="ring"></div>' : '<div class="dot"></div>';
+    if (sq === fallen) inner = inner.replace('<svg', '<svg class="fallen"');
+    if (target) inner += `<div class="${pc || target.flag === 'e' ? 'ring' : 'dot'}" style="--d:${legalTo.indexOf(target) * 18}ms"></div>`;
     if (vr === 7) inner += `<span class="cf">${'abcdefgh'[file]}</span>`;
     if (vc === 0) inner += `<span class="cr">${rank + 1}</span>`;
     h += `<div class="${cls.join(' ')}" data-sq="${sq}">${inner}</div>`;
@@ -453,7 +716,7 @@ function playerHtml(g, side) {
   const theirs = r.captured[color === 'w' ? 'b' : 'w'].reduce((a, p) => a + VALUE[C.typeOf(p)], 0);
   const adv = mine - theirs;
   const on = r.status === 'playing' && r.pos.turn === color;
-  return `<div class="player"><div class="turn ${on ? 'on' : ''}"></div>
+  return `<div class="player" data-side="${side}"><div class="turn ${on ? 'on' : ''}"></div>
     <div class="name">${esc(g.names[side])}</div><span class="muted" style="font-size:12px">${COLOR_WORD[side]}</span>
     <div class="caps grow" style="justify-content:flex-end">${took.map(pieceSvg).join('')}${adv > 0 ? `<span class="adv">+${adv}</span>` : ''}</div></div>`;
 }
@@ -472,7 +735,12 @@ function movesHtml(g) {
 function statusHtml() {
   const g = shown(), r = R(g);
   let big, sub = lastText(g), extra = '';
-  if (r.status === 'over') big = resultText(g);
+  if (phase === 'move') {
+    const g1 = lastSeq.g1, side = (g1.moves.length - 1) % 2;
+    const who = side === G.me && !G.hotseat ? 'You' : esc(g1.names[side]);
+    big = `${who} ${who === 'You' ? 'play' : 'plays'} ${esc(R(g1).sans[R(g1).sans.length - 1])}`;
+    sub = '';
+  } else if (r.status === 'over') big = resultText(g);
   else if (pending) { big = 'Check your move'; sub = 'You played ' + r.sans[r.sans.length - 1]; }
   else if (myTurn()) {
     big = G.hotseat ? `${esc(g.names[toMove(g)])} to move` : 'Your move';
@@ -484,7 +752,8 @@ function statusHtml() {
   } else if (!pending && g.offer && r.status === 'playing' && !myTurn()) {
     extra = `<div class="muted" style="margin-top:6px">Draw offered — waiting for an answer.</div>`;
   }
-  return `<div class="card status"><div class="big">${big}</div>${sub ? `<div class="last">${esc(sub)}</div>` : ''}${extra}</div>`;
+  const btn = !busy && lastSeq && lastSeq.g1 === (pending || G.game) ? '<button class="replay" id="replay">↻ Replay</button>' : '';
+  return `<div class="card status">${btn}<div class="big">${big}</div>${sub ? `<div class="last">${esc(sub)}</div>` : ''}${extra}</div>`;
 }
 
 function renderGame() {
@@ -494,7 +763,8 @@ function renderGame() {
   const flip = bottom === 1;
   app.innerHTML = `
     <div class="topbar"><button class="back" id="back">‹ Games</button>
-      <button class="muted" id="menu" aria-label="Menu" style="font-size:20px;padding:0 4px">⋯</button></div>
+      <span class="row" style="gap:14px"><button id="mute" aria-label="Sound" style="font-size:17px">${sfx.muted ? '🔇' : '🔊'}</button>
+      <button class="muted" id="menu" aria-label="Menu" style="font-size:20px;padding:0 4px">⋯</button></span></div>
     ${statusHtml()}
     ${playerHtml(g, 1 - bottom)}
     ${boardHtml(g, flip)}
@@ -504,7 +774,9 @@ function renderGame() {
   if (mv) mv.scrollLeft = mv.scrollWidth;
 
   let b;
-  if (pending) {
+  if (busy) {
+    b = `<div class="grow muted">Tap anywhere to skip</div>`;
+  } else if (pending) {
     b = `<button class="btn alt" id="undo">Undo</button>
       ${G.hotseat ? '' : `<button class="chip ${offerDraw ? 'on' : ''}" id="offer">½ Offer draw</button>`}
       <button class="btn grow" id="send">${G.hotseat ? 'Done' : 'Send move'}</button>`;
@@ -519,11 +791,13 @@ function renderGame() {
   }
   bar(b);
 
-  app.querySelector('#back').onclick = () => { screen = 'home'; sel = null; pending = null; render(); };
+  app.querySelector('#back').onclick = () => { screen = 'home'; sel = null; pending = null; lastSeq = null; render(); };
   app.querySelector('#menu').onclick = menu;
   app.querySelectorAll('[data-sq]').forEach(el => el.onclick = () => tapSquare(+el.dataset.sq));
   const on = (id, fn) => { const el = document.getElementById(id); if (el) el.onclick = fn; };
-  on('undo', () => { pending = null; offerDraw = false; render(); });
+  on('undo', () => { pending = null; offerDraw = false; lastSeq = null; render(); sfx.whoosh(); });
+  on('mute', () => { sfx.toggle(); render(); });
+  on('replay', () => animateTurn(lastSeq));
   on('offer', () => { offerDraw = !offerDraw; render(); });
   on('send', commit);
   on('accept', acceptDraw);
