@@ -85,14 +85,21 @@ function play(n, seed) {
     const lines = opts.filter(o => o.dst !== M.DST_FLOOR);
     const pool = lines.length && r() < 0.9 ? lines : opts;
     const mv = pool[Math.floor(r() * pool.length)];
+    const wasLast = M.finishers(s).length > 0;
     const held = M.applyMove(s, mv, true);
     s = M.applyMove(s, mv);
     if (s.last.roundEnd) {
+      // finishers() before scoring predicts exactly whether the game ends
+      assert.strictEqual(M.finishers(held).length > 0, s.over, 'last-round flag matches game end');
+      checks++;
       // hold stops right before scoring; scoreSteps on that board = what endRound scored
       assert(!held.last.roundEnd && held.round === (s.over ? s.round : s.round - 1));
       held.players.forEach((p, i) => assert.strictEqual(M.scoreSteps(p).reduce((a, x) => a + x.pts, 0), s.last.roundEnd[i].wall));
       checks += 2;
-    } else assert.deepStrictEqual(held, s, 'hold is a no-op mid-round');
+    } else {
+      assert.deepStrictEqual(held, s, 'hold is a no-op mid-round');
+      if (wasLast) assert(M.finishers(s).length > 0, 'last-round flag never clears mid-round');
+    }
     moves++;
     assert.strictEqual(M.totalTiles(s), 100, 'tiles conserved');
     const code = M.encode(s);

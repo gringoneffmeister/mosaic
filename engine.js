@@ -135,6 +135,15 @@
     return steps;
   }
 
+  // Players whose full pattern lines will finish a wall row when this round is scored — so it's the last round.
+  function finishers(s) {
+    const out = [];
+    s.players.forEach((p, i) => {
+      if ([0, 1, 2, 3, 4].some(r => p.lines[r].n === r + 1 && p.wall.slice(r * 5, r * 5 + 5).filter(Boolean).length === 4)) out.push(i);
+    });
+    return out;
+  }
+
   // move = { src: factory index | SRC_CENTER, c: color, dst: row 0–4 | DST_FLOOR }
   // hold: stop before round-end scoring (UI shows the board as it stood, then animates scoring).
   function applyMove(prev, move, hold) {
@@ -362,7 +371,7 @@
   const api = {
     NCOLORS, MARKER, FACTORIES, FLOOR_PEN, SRC_CENTER, DST_FLOOR,
     wallCol, wallColor, newGame, applyMove, legalRows, canPlace, sourceCounts,
-    placeScore, scoreSteps, floorPenalty, bonuses, standings, winners, totalTiles, encode, decode,
+    placeScore, scoreSteps, finishers, floorPenalty, bonuses, standings, winners, totalTiles, encode, decode,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Mosaic = api;

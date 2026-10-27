@@ -100,6 +100,7 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 /* status + bars */
 .status .big { font-size: 20px; font-weight: 700; }
 .status .last { color: var(--sub); margin-top: 4px; }
+.status .final { margin-top: 8px; font-size: 14px; font-weight: 650; color: var(--ink-accent, var(--peach)); }
 .summary { margin-top: 10px; display: grid; gap: 4px; font-size: 14px; }
 .summary div { display: flex; justify-content: space-between; }
 .pill { font-size: 12px; padding: 3px 8px; border-radius: 999px; background: var(--surface2); }
@@ -669,6 +670,7 @@ async function animateTurn(seq, live) {
     if (seq.A) {
       if (!live) { view = seq.A; phase = 'move'; renderGame(); await wait(500); }
       await playMove(seq.A, seq.B);
+      if (!scored && !M.finishers(seq.A).length && M.finishers(seq.B).length) { banner('Last round'); sfx.whoosh(); await wait(1500); }
       await wait(scored ? 450 : 150);
     }
     if (scored) await playScoring(seq.B, C);
@@ -1017,6 +1019,11 @@ function statusHtml(s) {
   else big = `Waiting for ${esc(s.names[s.cur])}`;
   const last = moveText(s);
   let extra = '';
+  const fin = s.over || phase === 'score' ? [] : M.finishers(s);
+  if (fin.length) {
+    const who = fin.map(i => (i === G.me && !G.hotseat ? 'You' : esc(s.names[i])));
+    extra = `<div class="final">🏁 Last round — ${who.join(' & ')} will finish a row</div>`;
+  }
   if (s.over) {
     extra = `<div class="summary">${M.standings(s).map((x, k) => `<div><span>${k + 1}. ${esc(x.name)}</span><b>${x.score}</b></div>`).join('')}</div>`;
   }
