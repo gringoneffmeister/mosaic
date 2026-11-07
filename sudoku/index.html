@@ -608,6 +608,9 @@ if (screen === 'game' && G() && !G().over) G().paused = true;
 tickLast = performance.now();
 addEventListener('hashchange', fromHash);
 if (!fromHash()) render();
+
+// Keep a copy on the phone so it opens with no signal (sw.js).
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 </script>
 </body>
 </html>
