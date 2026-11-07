@@ -2,9 +2,9 @@
 // Opening any game online once stores all of them. Online, pages load fresh from the network
 // (so a move link never meets old code); with no signal, or a network that stalls, the saved copy is used.
 // Bump VERSION when FILES changes.
-const VERSION = 'mosaic-v1';
+const VERSION = 'mosaic-v2';
 const FILES = [
-  './', 'index.html', 'engine.js', 'sfx.js', 'theme.js', 'theme.css', 'manifest.json', 'icon.svg', 'icon-180.png', 'icon-512.png',
+  './', 'index.html', 'engine.js', 'bot.js', 'sfx.js', 'theme.js', 'theme.css', 'manifest.json', 'icon.svg', 'icon-180.png', 'icon-512.png',
   'chess/', 'chess/index.html', 'chess/engine.js', 'chess/pieces.js', 'chess/bot.js', 'chess/manifest.json', 'chess/icon.svg', 'chess/icon-180.png', 'chess/icon-512.png',
   'sixes/', 'sixes/index.html', 'sixes/engine.js', 'sixes/bot.js', 'sixes/manifest.json', 'sixes/icon.svg', 'sixes/icon-180.png', 'sixes/icon-512.png',
   'sudoku/', 'sudoku/index.html', 'sudoku/engine.js', 'sudoku/manifest.json', 'sudoku/icon.svg', 'sudoku/icon-180.png', 'sudoku/icon-512.png',

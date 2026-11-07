@@ -173,6 +173,7 @@ label.check { display: flex; gap: 10px; align-items: center; margin-top: 12px; }
 <div id="app"></div>
 <script src="sfx.js"></script>
 <script src="engine.js"></script>
+<script src="bot.js"></script>
 <script>
 'use strict';
 const M = window.Mosaic;
@@ -189,20 +190,21 @@ const store = {
 const gkey = id => 'mosaic:g:' + id;
 
 let screen = 'home';
-let G = null;        // { state, me, hotseat }
+let G = null;        // { state, me, hotseat, bots: [level | null per player] | null }
 let sel = null;      // { src, c }
 let pending = null;  // state after this turn's move, before it's sent
-let newForm = { n: 3, names: [store.get('mosaic:name') || '', '', '', ''], hotseat: false };
+let newForm = { n: 3, names: [store.get('mosaic:name') || '', '', '', ''], opp: 'friend', level: 'medium' };
+const LEVEL_NAME = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };
 
 function saveGame() {
   if (!G) return;
-  store.set(gkey(G.state.id), { code: M.encode(G.state), me: G.me, hotseat: G.hotseat, updated: Date.now() });
+  store.set(gkey(G.state.id), { code: M.encode(G.state), me: G.me, hotseat: G.hotseat, bots: G.bots || null, updated: Date.now() });
   store.set('mosaic:open', G.state.id);
 }
 function loadGame(id) {
   const r = store.get(gkey(id));
   if (!r) return null;
-  try { return { state: M.decode(r.code), me: r.me, hotseat: !!r.hotseat }; } catch { return null; }
+  try { return { state: M.decode(r.code), me: r.me, hotseat: !!r.hotseat, bots: r.bots || null }; } catch { return null; }
 }
 function listGames() {
   return store.keys().filter(k => k.startsWith('mosaic:g:'))
@@ -269,7 +271,7 @@ function ingest(code) {
     G = prev;
   } else {
     seq = buildSeq(prev && prev.state, s);
-    G = { state: s, me: prev ? prev.me : null, hotseat: prev ? prev.hotseat : false };
+    G = { state: s, me: prev ? prev.me : null, hotseat: prev ? prev.hotseat : false, bots: prev ? prev.bots : null };
   }
   sel = null; pending = null; lastSeq = null; screen = 'game';
   saveGame();
@@ -316,8 +318,33 @@ function commit() {
   pending = null;
   saveGame();
   sfx.whoosh();
-  if (!G.hotseat) share(); // must run inside the tap for the share sheet to open
+  if (!G.hotseat && !G.bots) share(); // must run inside the tap for the share sheet to open
   render();
+  botTurn();
+}
+
+// ---- computer players ----
+// bot.js sees only the table, like a person. Its moves animate like a friend's link.
+let thinking = false;
+function botTurn() {
+  if (!G || !G.bots || busy || pending || thinking || screen !== 'game') return;
+  const s = G.state;
+  if (s.over || !G.bots[s.cur]) return;
+  thinking = true;
+  renderGame();
+  const id = s.id, turn = s.turn;
+  setTimeout(() => {
+    thinking = false;
+    if (!G || G.state.id !== id || G.state.turn !== turn) return;
+    const A = G.state;
+    let move;
+    try { move = MosaicBot.choose(A, G.bots[A.cur]); } catch (e) { toast('The computer got stuck: ' + e.message); render(); return; }
+    const C = M.applyMove(A, move);
+    G.state = C;
+    saveGame();
+    if (screen !== 'game') return;
+    animateTurn({ A, B: M.applyMove(A, move, true), C }, false).then(botTurn);
+  }, 700);
 }
 
 function share() {
@@ -817,7 +844,7 @@ async function finalTally(s) {
       const row = q(body, `[data-k="${k}"]`);
       row.style.opacity = '';
       anim(row, [{ opacity: 0, transform: 'translateY(16px) scale(.95)' }, { opacity: 1, transform: 'none' }], { duration: 380, easing: 'cubic-bezier(.3,1.5,.5,1)' });
-      if (k === 0) { sfx.fanfare(); confetti(); buzz(60); }
+      if (k === 0) { if (G.bots && !win.includes(G.me)) sfx.sad(); else { sfx.fanfare(); confetti(); } buzz(60); } // losing to the computer gets no confetti
       else sfx.pop();
       await wait(k === 0 ? 300 : 550);
     }
@@ -879,6 +906,7 @@ function renderHome() {
       <b>How it works.</b> Every move makes a link. Send it to the group text; whoever's next taps it and plays.
       The link carries the whole game, so nobody falls behind — and an old link can't overwrite a newer one.
       Nothing is stored online.
+      <br><br><b>Solo?</b> New game › <b>Computer</b> plays 1–3 opponents (Easy, Medium, Hard), offline too.
     </div>`;
   bar(null);
   app.querySelector('#new').onclick = () => { screen = 'new'; render(); };
@@ -886,7 +914,8 @@ function renderHome() {
   app.querySelector('#theme').onclick = Theme.open;
   app.querySelectorAll('[data-open]').forEach(b => b.onclick = () => {
     G = loadGame(+b.dataset.open); sel = null; pending = null; screen = 'game'; render();
-    if (G.me == null && !G.hotseat) askWho();
+    if (G.me == null && !G.hotseat && !G.bots) askWho();
+    botTurn();
   });
   app.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
     if (confirm('Remove this game from this phone? (Others keep their copy.)')) { store.del(gkey(b.dataset.del)); render(); }
@@ -901,27 +930,35 @@ function renderNew() {
     <div class="card">
       <div class="kicker">Players</div>
       <div class="seg">${[2, 3, 4].map(n => `<button data-n="${n}" class="${f.n === n ? 'on' : ''}">${n}</button>`).join('')}</div>
+      <div class="kicker" style="margin-top:14px">Opponents</div>
+      <div class="seg">${[['friend', 'By text'], ['phone', 'Same phone'], ['computer', 'Computer']].map(([v, l]) => `<button data-o="${v}" class="${f.opp === v ? 'on' : ''}">${l}</button>`).join('')}</div>
+      ${f.opp === 'computer' ? `<div class="kicker" style="margin-top:14px">Computer level</div>
+      <div class="seg">${Object.entries(LEVEL_NAME).map(([v, l]) => `<button data-l="${v}" class="${f.level === v ? 'on' : ''}">${l}</button>`).join('')}</div>` : ''}
       <div class="stack" style="margin-top:12px">
-        ${Array.from({ length: f.n }, (_, i) => `<input type="text" data-name="${i}" maxlength="16" placeholder="${i === 0 ? 'You' : 'Player ' + (i + 1)}" value="${esc(f.names[i])}">`).join('')}
+        ${Array.from({ length: f.opp === 'computer' ? 1 : f.n }, (_, i) => `<input type="text" data-name="${i}" maxlength="16" placeholder="${i === 0 ? 'You' : 'Player ' + (i + 1)}" value="${esc(f.names[i])}">`).join('')}
       </div>
-      <div class="muted" style="font-size:13px;margin-top:8px">Turn order is top to bottom. First name is you.</div>
-      <label class="check"><input type="checkbox" id="hot" ${f.hotseat ? 'checked' : ''}> Everyone on this one phone (pass & play)</label>
+      <div class="muted" style="font-size:13px;margin-top:8px">${f.opp === 'computer'
+        ? `You go first, against ${f.n - 1} computer${f.n > 2 ? 's' : ''}.` : 'Turn order is top to bottom. First name is you.'}</div>
     </div>`;
   bar(`<button class="btn grow" id="start">Start game</button>`);
   app.querySelector('#back').onclick = () => { screen = 'home'; render(); };
   app.querySelectorAll('[data-n]').forEach(b => b.onclick = () => { f.n = +b.dataset.n; render(); });
   app.querySelectorAll('[data-name]').forEach(inp => inp.oninput = () => { f.names[+inp.dataset.name] = inp.value; });
-  app.querySelector('#hot').onchange = e => { f.hotseat = e.target.checked; };
+  app.querySelectorAll('[data-o]').forEach(b => b.onclick = () => { f.opp = b.dataset.o; render(); });
+  app.querySelectorAll('[data-l]').forEach(b => b.onclick = () => { f.level = b.dataset.l; render(); });
   document.getElementById('start').onclick = () => {
-    const names = f.names.slice(0, f.n).map((x, i) => x.trim() || (i === 0 ? 'You' : 'Player ' + (i + 1)));
+    const bot = f.opp === 'computer';
+    const names = bot
+      ? [f.names[0].trim() || 'You', ...Array.from({ length: f.n - 1 }, (_, i) => f.n > 2 ? `Computer ${i + 1}` : 'Computer')]
+      : f.names.slice(0, f.n).map((x, i) => x.trim() || (i === 0 ? 'You' : 'Player ' + (i + 1)));
     const r = new Uint32Array(2);
     crypto.getRandomValues(r);
-    G = { state: M.newGame(names, r[0], r[1]), me: 0, hotseat: f.hotseat };
+    G = { state: M.newGame(names, r[0], r[1]), me: 0, hotseat: f.opp === 'phone', bots: bot ? names.map((_, i) => (i ? f.level : null)) : null };
     store.set('mosaic:name', names[0]);
     sel = null; pending = null; lastSeq = null; screen = 'game';
     saveGame(); render();
     busy = true; phase = 'refill'; render();
-    playRefill(G.state).then(() => { busy = false; phase = null; render(); });
+    playRefill(G.state).then(() => { busy = false; phase = null; render(); botTurn(); });
   };
 }
 
@@ -1017,6 +1054,7 @@ function statusHtml(s) {
     const w = M.winners(s).map(i => s.names[i]);
     big = `🏆 ${esc(w.join(' & '))} ${w.length > 1 ? 'tie' : 'wins'}`;
   } else if (pending) big = 'Check your move';
+  else if (G.bots && G.bots[s.cur]) big = `${esc(s.names[s.cur])} is thinking…`;
   else if (myTurn()) big = G.hotseat ? `${esc(s.names[s.cur])}'s turn` : 'Your turn';
   else big = `Waiting for ${esc(s.names[s.cur])}`;
   const last = moveText(s);
@@ -1055,14 +1093,16 @@ function renderGame() {
   if (busy) {
     b = `<div class="grow muted">Tap anywhere to skip</div>`;
   } else if (pending) {
-    b = `<button class="btn ghost" id="undo">Undo</button><button class="btn grow" id="send">${G.hotseat ? 'Done — next player' : 'Send move'}</button>`;
+    b = `<button class="btn ghost" id="undo">Undo</button><button class="btn grow" id="send">${G.bots ? 'Done' : G.hotseat ? 'Done — next player' : 'Send move'}</button>`;
   } else if (s.over) {
-    b = `<button class="btn ghost grow" id="sharelink">Share result</button><button class="btn grow" id="again">New game</button>`;
+    b = `${G.bots ? '' : '<button class="btn ghost grow" id="sharelink">Share result</button>'}<button class="btn grow" id="again">New game</button>`;
   } else if (interactive && sel) {
     const k = M.sourceCounts(s, sel.src)[sel.c];
     b = `<div class="grow">Place <b>${k} ${COLOR_NAMES[sel.c]}</b> — tap a lit row or the floor</div><button class="btn ghost small" id="cancel">Cancel</button>`;
   } else if (interactive) {
     b = `<div class="grow muted">Tap a color in a factory or the center</div>`;
+  } else if (G.bots) {
+    b = `<div class="grow muted">${esc(s.names[s.cur])}'s turn</div>`;
   } else if (G.state.last && G.state.last.p === G.me) {
     b = `<div class="grow muted">Sent? If not:</div><button class="btn small" id="sharelink">Send link again</button>`;
   } else {
@@ -1083,7 +1123,12 @@ function renderGame() {
   on('theme', Theme.open);
   on('replay', () => animateTurn(lastSeq));
   on('tallybtn', () => finalTally(G.state));
-  on('again', () => { newForm.names = G.state.names.slice(); newForm.n = G.state.n; screen = 'new'; render(); });
+  on('again', () => {
+    newForm.n = G.state.n;
+    if (G.bots) { newForm.opp = 'computer'; newForm.level = G.bots.find(Boolean) || newForm.level; newForm.names[0] = G.state.names[G.me]; }
+    else { newForm.names = G.state.names.slice(); newForm.opp = G.hotseat ? 'phone' : 'friend'; }
+    screen = 'new'; render();
+  });
 }
 
 // ---- boot ----
@@ -1099,7 +1144,7 @@ function boot() {
   const open = store.get('mosaic:open');
   if (open != null && reload) {
     G = loadGame(open);
-    if (G) { screen = 'game'; render(); return; }
+    if (G) { screen = 'game'; render(); botTurn(); return; }
   }
   screen = 'home';
   render();
