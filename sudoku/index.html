@@ -349,7 +349,7 @@ function renderHome() {
   const open = g ? [...g.puzzle].filter(v => v === '0').length : 1;
   const given = g ? 81 - open : 0;
   app.innerHTML = `
-    <div class="topbar"><a class="back" href="../">‹ Mosaic</a>
+    <div class="topbar"><a class="back" href="../">‹ All games</a>
       <span class="icons"><button id="theme" aria-label="Colors">🎨</button></span></div>
     <div class="hero">Sudoku</div>
     <div class="muted" style="margin-bottom:14px">Saves as you go on this phone</div>

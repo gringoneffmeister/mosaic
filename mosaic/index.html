@@ -1,0 +1,1153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1e1e2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta property="og:title" content="Mosaic — your move">
+<meta property="og:description" content="Tap to open the game">
+<script src="../theme.js"></script>
+<title>Mosaic</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.json">
+<style>
+:root {
+  --bg: #1e1e2e; --mantle: #181825; --crust: #11111b;
+  --surface: #313244; --surface2: #45475a; --overlay: #6c7086;
+  --text: #cdd6f4; --sub: #a6adc8; --peach: #fab387; --green: #a6e3a1; --red: #f38ba8;
+  --c0: #2f6fd6; --c1: #f2c230; --c2: #e04b3a; --c3: #24252f; --c4: #cfe9f0;
+  --cell: min(32px, calc((min(100vw, 480px) - 112px) / 10));
+  --ftile: 28px;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body { font: 15px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, system-ui, sans-serif; overscroll-behavior: none; }
+button { font: inherit; color: inherit; border: 0; background: none; padding: 0; cursor: pointer; touch-action: manipulation; }
+#app { max-width: 480px; margin: 0 auto; padding: max(12px, env(safe-area-inset-top)) 16px calc(96px + env(safe-area-inset-bottom)); }
+
+.card { background: var(--surface); border-radius: 16px; padding: 14px; margin-bottom: 12px; }
+.kicker { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--sub); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+.btn { background: var(--peach); color: var(--crust); font-weight: 650; border-radius: 12px; padding: 12px 16px; }
+.btn.ghost { background: var(--surface2); color: var(--text); }
+.btn.small { padding: 7px 12px; font-size: 13px; border-radius: 10px; }
+.row { display: flex; gap: 10px; align-items: center; }
+.grow { flex: 1; }
+.muted { color: var(--sub); }
+
+/* tiles */
+.t { width: var(--ftile); height: var(--ftile); border-radius: 6px; position: relative; flex: none;
+     box-shadow: inset 0 -2px 0 rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.25); }
+.t::after { content: ""; position: absolute; inset: 30%; border-radius: 2px; opacity: .55; }
+.t0 { background: var(--c0); } .t0::after { background: #9cc0ff; transform: rotate(45deg); }
+.t1 { background: var(--c1); } .t1::after { background: #c0392b; border-radius: 50%; }
+.t2 { background: var(--c2); } .t2::after { background: #ffd2a0; inset: 34%; transform: rotate(45deg); }
+.t3 { background: var(--c3); box-shadow: inset 0 0 0 1px #585b70, inset 0 -2px 0 rgba(0,0,0,.4); } .t3::after { background: #cdd6f4; inset: 36%; border-radius: 50%; }
+.t4 { background: var(--c4); } .t4::after { background: #4a90a8; inset: 28%; clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); opacity: .7; border-radius: 0; }
+.tm { background: #f5f5f5; color: #1e1e2e; font-weight: 800; display: grid; place-items: center; font-size: 15px; }
+.tm::after { display: none; }
+
+/* factories */
+.factories { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; justify-items: center; }
+.factory { width: 76px; height: 76px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #585b70, #3a3b4f 70%);
+           display: grid; grid-template-columns: repeat(2, var(--ftile)); gap: 4px; place-content: center; position: relative; }
+.factory.empty { opacity: .3; }
+.factory .num { position: absolute; top: -4px; left: -2px; font-size: 10px; color: var(--sub); }
+.center { margin-top: 12px; background: var(--mantle); border-radius: 14px; padding: 10px; min-height: 52px; display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.center .label { width: 100%; font-size: 11px; color: var(--sub); letter-spacing: .08em; text-transform: uppercase; }
+.pick { transition: transform .12s, opacity .12s; }
+.pick.on { transform: translateY(-3px); outline: 2px solid var(--peach); outline-offset: 2px; }
+.pick.dim { opacity: .35; }
+
+/* boards */
+.board .bhead { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.board .bname { font-weight: 650; font-size: 16px; }
+.score { font-size: 28px; font-weight: 750; font-variant-numeric: tabular-nums; }
+.brow { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; border-radius: 8px; padding: 2px; }
+.brow.can { background: rgba(250,179,135,.18); outline: 2px solid var(--peach); cursor: pointer; }
+.cells { display: flex; gap: 3px; }
+.slot { width: var(--cell); height: var(--cell); border-radius: 6px; flex: none; }
+.slot.line { background: var(--mantle); box-shadow: inset 0 0 0 1px #45475a; }
+.slot.blank { background: none; }
+.slot.t { width: var(--cell); height: var(--cell); }
+.faint { opacity: .16; box-shadow: none; }
+.t3.faint { opacity: .45; }
+.faint::after { opacity: .9; }
+.arrow { color: var(--overlay); font-size: 12px; width: 8px; text-align: center; }
+.floor { margin-top: 10px; display: flex; gap: 3px; padding: 4px; border-radius: 8px; }
+.floor.can { background: rgba(250,179,135,.18); outline: 2px solid var(--peach); cursor: pointer; }
+.fslot { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.fslot .pen { font-size: 10px; color: var(--red); }
+.fslot .slot.line { background: #2a1f2a; }
+
+/* opponents */
+.opps { display: grid; gap: 8px; margin-bottom: 12px; }
+.mini { background: var(--surface); border-radius: 12px; padding: 8px; border: 2px solid transparent; }
+.mini.active { border-color: var(--peach); }
+.mini .mhead { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; gap: 4px; }
+.mini .mhead span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini .mrow { display: flex; gap: 2px; margin-bottom: 2px; justify-content: center; }
+.mini .ms { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+.mini .ms.line { background: var(--mantle); }
+.mini .ms.blank { background: none; }
+.mini .ms.t::after { display: none; }
+.mini .ms.gap { width: 3px; }
+.mini .mfloor { display: flex; gap: 2px; margin-top: 4px; justify-content: center; min-height: 9px; }
+.mini .ms.tm { font-size: 0; }
+
+/* status + bars */
+.status .big { font-size: 20px; font-weight: 700; }
+.status .last { color: var(--sub); margin-top: 4px; }
+.status .final { margin-top: 8px; font-size: 14px; font-weight: 650; color: var(--ink-accent, var(--peach)); }
+.summary { margin-top: 10px; display: grid; gap: 4px; font-size: 14px; }
+.summary div { display: flex; justify-content: space-between; }
+.pill { font-size: 12px; padding: 3px 8px; border-radius: 999px; background: var(--surface2); }
+.pill.go { background: var(--peach); color: var(--crust); font-weight: 650; }
+.bar { position: fixed; left: 0; right: 0; bottom: 0; background: rgba(24,24,37,.96); backdrop-filter: blur(10px);
+       border-top: 1px solid var(--surface); padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); }
+.bar .in { max-width: 448px; margin: 0 auto; display: flex; gap: 10px; align-items: center; min-height: 44px; }
+.topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.back { color: var(--ink-accent, var(--peach)); font-size: 15px; }
+
+/* home + forms */
+h1 { font-size: 34px; margin: 18px 0 2px; letter-spacing: -.02em; }
+.game-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; }
+.game-item .names { font-weight: 600; }
+.seg { display: flex; background: var(--mantle); border-radius: 10px; padding: 3px; }
+.seg button { flex: 1; padding: 8px; border-radius: 8px; color: var(--sub); }
+.seg button.on { background: var(--surface2); color: var(--text); font-weight: 650; }
+input[type=text], textarea { width: 100%; background: var(--mantle); color: var(--text); border: 1px solid var(--surface2); border-radius: 10px; padding: 11px 12px; font: inherit; font-size: 16px; }
+textarea { min-height: 110px; resize: vertical; }
+label.check { display: flex; gap: 10px; align-items: center; margin-top: 12px; }
+.stack { display: grid; gap: 8px; }
+.modal { position: fixed; inset: 0; background: rgba(17,17,27,.75); display: grid; place-items: end center; z-index: 10; }
+.modal .sheet { background: var(--surface); width: 100%; max-width: 480px; border-radius: 20px 20px 0 0; padding: 20px 16px calc(20px + env(safe-area-inset-bottom)); }
+.toast { position: fixed; left: 50%; top: max(16px, env(safe-area-inset-top)); transform: translateX(-50%); background: var(--crust); color: var(--text);
+         padding: 10px 14px; border-radius: 12px; z-index: 40; box-shadow: 0 6px 24px rgba(0,0,0,.4); max-width: 90vw; font-size: 14px; }
+.how { font-size: 13px; color: var(--sub); }
+.how b { color: var(--text); }
+
+/* animation + sound */
+.pick.on { animation: hop .42s cubic-bezier(.3,1.7,.5,1) both; animation-delay: calc(var(--i, 0) * 50ms); }
+@keyframes hop { 0% { transform: translateY(0); } 45% { transform: translateY(-10px) rotate(-6deg) scale(1.08); } 100% { transform: translateY(-3px); } }
+.brow.can, .floor.can { animation: lit 1.3s ease-in-out infinite; }
+@keyframes lit { 0%, 100% { background: rgba(250,179,135,.12); } 50% { background: rgba(250,179,135,.32); } }
+[data-score] { display: inline-block; }
+.t9 { background: #585b70; } .t9::after { display: none; }
+.fx { position: fixed; inset: 0; pointer-events: none; z-index: 30; overflow: hidden; }
+.fx > .flying { position: fixed; margin: 0; transform-origin: center; outline: none;
+                box-shadow: 0 8px 16px rgba(0,0,0,.45), inset 0 -2px 0 rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.25); }
+.fx > .confetto { position: fixed; }
+.float { position: fixed; font-weight: 800; font-size: 18px; text-shadow: 0 2px 8px rgba(0,0,0,.7); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.float.plus { color: var(--green); } .float.minus { color: var(--red); } .float.bonus { color: var(--peach); font-size: 26px; }
+.banner { position: fixed; left: 0; right: 0; top: 36%; text-align: center; font-size: 44px; font-weight: 800; letter-spacing: -.02em;
+          color: var(--peach); text-shadow: 0 4px 28px rgba(0,0,0,.8); }
+.status { position: relative; }
+.replay { position: absolute; top: 14px; right: 14px; font-size: 13px; color: var(--ink-accent, var(--peach)); }
+.watch { position: fixed; inset: 0; z-index: 12; background: rgba(17,17,27,.55); display: grid; place-content: center; justify-items: center; gap: 16px; }
+.watch .btn { font-size: 18px; padding: 16px 22px; box-shadow: 0 10px 30px rgba(0,0,0,.5); animation: breathe 1.6s ease-in-out infinite; }
+@keyframes breathe { 50% { transform: scale(1.05); } }
+.tally { position: fixed; inset: 0; z-index: 25; background: rgba(17,17,27,.94); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+         display: grid; place-items: center; padding: 16px; overflow-y: auto; }
+.tsheet { width: 100%; max-width: 400px; }
+.tname { font-size: 22px; font-weight: 700; text-align: center; }
+.tscore { font-size: 56px; font-weight: 800; text-align: center; color: var(--peach); font-variant-numeric: tabular-nums; line-height: 1.1; margin-bottom: 14px; }
+.tscore span { display: inline-block; }
+.twall { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; width: min(280px, 78vw); margin: 0 auto; }
+.twall .t { width: 100%; height: auto; aspect-ratio: 1; border-radius: 9px; }
+.twall .t.lit { outline: 2px solid var(--peach); outline-offset: 1px; }
+.tlog { margin-top: 16px; min-height: 96px; display: grid; gap: 4px; align-content: start; font-size: 15px; text-align: center; color: var(--sub); }
+.tlog b { color: var(--peach); }
+.podium { display: grid; gap: 8px; }
+.prow { display: flex; align-items: center; gap: 12px; background: var(--surface); border-radius: 14px; padding: 12px 14px; font-size: 17px; }
+.prow.win { background: linear-gradient(135deg, rgba(249,226,175,.22), rgba(250,179,135,.22)); outline: 2px solid var(--peach); font-size: 20px; font-weight: 700; }
+.prow .medal { font-size: 26px; width: 34px; text-align: center; }
+.prow .pts { margin-left: auto; font-weight: 750; font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .pick.on, .brow.can, .floor.can, .watch .btn { animation: none; } }
+</style>
+<link rel="stylesheet" href="../theme.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="../sfx.js"></script>
+<script src="engine.js"></script>
+<script src="bot.js"></script>
+<script>
+'use strict';
+const M = window.Mosaic;
+const COLOR_NAMES = ['blue', 'yellow', 'red', 'black', 'ice'];
+const app = document.getElementById('app');
+
+// ---- storage (per-device only; the link is the real source of truth) ----
+const store = {
+  get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  del(k) { try { localStorage.removeItem(k); } catch {} },
+  keys() { try { return Object.keys(localStorage); } catch { return []; } },
+};
+const gkey = id => 'mosaic:g:' + id;
+
+let screen = 'home';
+let G = null;        // { state, me, hotseat, bots: [level | null per player] | null }
+let sel = null;      // { src, c }
+let pending = null;  // state after this turn's move, before it's sent
+let newForm = { n: 3, names: [store.get('mosaic:name') || '', '', '', ''], opp: 'friend', level: 'medium' };
+const LEVEL_NAME = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };
+
+function saveGame() {
+  if (!G) return;
+  store.set(gkey(G.state.id), { code: M.encode(G.state), me: G.me, hotseat: G.hotseat, bots: G.bots || null, updated: Date.now() });
+  store.set('mosaic:open', G.state.id);
+}
+function loadGame(id) {
+  const r = store.get(gkey(id));
+  if (!r) return null;
+  try { return { state: M.decode(r.code), me: r.me, hotseat: !!r.hotseat, bots: r.bots || null }; } catch { return null; }
+}
+function listGames() {
+  return store.keys().filter(k => k.startsWith('mosaic:g:'))
+    .map(k => { const r = store.get(k); try { return { s: M.decode(r.code), me: r.me, hotseat: r.hotseat, updated: r.updated }; } catch { return null; } })
+    .filter(Boolean).sort((a, b) => b.updated - a.updated);
+}
+
+// ---- helpers ----
+const esc = s => String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+const tile = (c, cls = '', attrs = '') => `<div class="t ${c === M.MARKER ? 'tm' : 't' + c} ${cls}" ${attrs}>${c === M.MARKER ? '1' : ''}</div>`;
+const baseUrl = () => location.origin + location.pathname;
+const linkFor = s => baseUrl() + '#g=' + M.encode(s);
+
+function toast(msg) {
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3200);
+}
+
+function moveText(s) {
+  const L = s.last;
+  if (!L) return '';
+  const who = s.names[L.p];
+  const from = L.src === M.SRC_CENTER ? 'the center' : 'factory ' + (L.src + 1);
+  const to = L.dst === M.DST_FLOOR ? 'the floor' : 'row ' + (L.dst + 1);
+  let t = `${who} took ${L.k} ${COLOR_NAMES[L.c]} from ${from} → ${to}`;
+  if (L.dst !== M.DST_FLOOR && L.toFloor) t += ` (${L.toFloor} to floor)`;
+  if (L.marker) t += ' + first-player tile';
+  return t;
+}
+
+function shareText(s) {
+  const head = `Mosaic · move ${s.turn}: ${moveText(s)}.`;
+  if (s.over) {
+    const w = M.winners(s).map(i => s.names[i]).join(' & ');
+    return `${head} Game over — ${w} wins!`;
+  }
+  return `${head} ${s.names[s.cur]}'s turn.`;
+}
+
+// Whose board sits big at the bottom.
+function viewIdx() {
+  if (G.hotseat) return G.state.cur;
+  return G.me ?? G.state.cur;
+}
+function myTurn() {
+  const s = G.state;
+  return !busy && !s.over && !pending && (G.hotseat || G.me === s.cur);
+}
+
+// ---- incoming links / codes ----
+function ingest(code) {
+  let s;
+  try { s = M.decode(code); } catch (e) { toast(e.message); return false; }
+  const prev = loadGame(s.id);
+  let seq = null;
+  stopAnim();
+  if (prev && prev.state.turn > s.turn) {
+    G = prev;
+    toast(`That's an older link — you already have move ${prev.state.turn}`);
+  } else if (prev && prev.state.turn === s.turn) {
+    G = prev;
+  } else {
+    seq = buildSeq(prev && prev.state, s);
+    G = { state: s, me: prev ? prev.me : null, hotseat: prev ? prev.hotseat : false, bots: prev ? prev.bots : null };
+  }
+  sel = null; pending = null; lastSeq = null; screen = 'game';
+  saveGame();
+  render();
+  if (G.me == null && !G.hotseat) askWho(() => offerWatch(seq));
+  else offerWatch(seq);
+  return true;
+}
+
+function extractCode(text) {
+  const m = text.match(/[#&?]g=([A-Za-z0-9_-]+)/);
+  if (m) return m[1];
+  const raw = text.trim().match(/[A-Za-z0-9_-]{40,}/);
+  return raw ? raw[0] : null;
+}
+
+// ---- actions ----
+function pickTile(src, c) {
+  if (!myTurn()) {
+    if (!G.state.over && !pending) toast(`It's ${G.state.names[G.state.cur]}'s turn`);
+    return;
+  }
+  sel = sel && sel.src === src && sel.c === c ? null : { src, c };
+  render();
+  if (sel) { sfx.pick(M.sourceCounts(G.state, src)[c]); buzz(6); }
+  else sfx.clack(0, .9, .4);
+}
+
+function placeRow(row) {
+  if (!sel || busy) return;
+  const p = G.state.players[G.state.cur];
+  if (row !== M.DST_FLOOR && !M.canPlace(p, row, sel.c)) return;
+  const move = { src: sel.src, c: sel.c, dst: row };
+  const A = G.state;
+  pending = M.applyMove(A, move);
+  sel = null;
+  animateTurn({ A, B: M.applyMove(A, move, true), C: pending }, true);
+}
+
+function undo() { pending = null; lastSeq = null; render(); sfx.whoosh(); }
+
+function commit() {
+  G.state = pending;
+  pending = null;
+  saveGame();
+  sfx.whoosh();
+  if (!G.hotseat && !G.bots) share(); // must run inside the tap for the share sheet to open
+  render();
+  botTurn();
+}
+
+// ---- computer players ----
+// bot.js sees only the table, like a person. Its moves animate like a friend's link.
+let thinking = false;
+function botTurn() {
+  if (!G || !G.bots || busy || pending || thinking || screen !== 'game') return;
+  const s = G.state;
+  if (s.over || !G.bots[s.cur]) return;
+  thinking = true;
+  renderGame();
+  const id = s.id, turn = s.turn;
+  setTimeout(() => {
+    thinking = false;
+    if (!G || G.state.id !== id || G.state.turn !== turn) return;
+    const A = G.state;
+    let move;
+    try { move = MosaicBot.choose(A, G.bots[A.cur]); } catch (e) { toast('The computer got stuck: ' + e.message); render(); return; }
+    const C = M.applyMove(A, move);
+    G.state = C;
+    saveGame();
+    if (screen !== 'game') return;
+    animateTurn({ A, B: M.applyMove(A, move, true), C }, false).then(botTurn);
+  }, 700);
+}
+
+function share() {
+  const s = G.state;
+  const msg = shareText(s) + '\n' + linkFor(s);
+  if (navigator.share) {
+    navigator.share({ text: msg }).catch(e => { if (e.name !== 'AbortError') copyFallback(msg); });
+  } else copyFallback(msg);
+}
+
+function copyFallback(msg) {
+  const done = () => toast('Link copied — paste it in the group text');
+  if (navigator.clipboard) navigator.clipboard.writeText(msg).then(done, () => showLink(msg));
+  else showLink(msg);
+}
+
+// ---- modals ----
+function modal(html) {
+  const m = document.createElement('div');
+  m.className = 'modal';
+  m.innerHTML = `<div class="sheet">${html}</div>`;
+  m.addEventListener('click', e => { if (e.target === m) m.remove(); });
+  document.body.appendChild(m);
+  return m;
+}
+
+function askWho(then) {
+  const s = G.state;
+  const m = modal(`<div class="kicker">Who's on this phone?</div>
+    <div class="stack">${s.names.map((n, i) => `<button class="btn ghost" data-i="${i}">${esc(n)}</button>`).join('')}
+    <button class="btn ghost" data-i="hot">We're all on this one phone</button></div>`);
+  m.querySelectorAll('[data-i]').forEach(b => b.onclick = () => {
+    if (b.dataset.i === 'hot') G.hotseat = true;
+    else { G.me = +b.dataset.i; store.set('mosaic:name', s.names[G.me]); }
+    saveGame(); m.remove(); render();
+    if (then) then();
+  });
+}
+
+function askPaste() {
+  const m = modal(`<div class="kicker">Paste a link or code</div>
+    <textarea id="paste" placeholder="Paste the whole message — the link is found automatically"></textarea>
+    <div class="row" style="margin-top:12px"><button class="btn ghost grow" id="cancel">Cancel</button><button class="btn grow" id="go">Open</button></div>`);
+  m.querySelector('#cancel').onclick = () => m.remove();
+  m.querySelector('#go').onclick = () => {
+    const code = extractCode(m.querySelector('#paste').value);
+    if (!code) return toast('No game code found in that text');
+    if (ingest(code)) m.remove();
+  };
+  setTimeout(() => m.querySelector('#paste').focus(), 50);
+}
+
+function showLink(msg) {
+  const m = modal(`<div class="kicker">Copy this into the group text</div><textarea readonly>${esc(msg)}</textarea>
+    <button class="btn" style="width:100%;margin-top:12px" id="ok">Done</button>`);
+  m.querySelector('textarea').select();
+  m.querySelector('#ok').onclick = () => m.remove();
+}
+
+// ---- animation state ----
+let view = null;      // state on screen while an animation runs (overrides pending / G.state)
+let phase = null;     // 'move' | 'score' | 'refill' while animating
+let busy = false;     // input locked; a tap skips to the end
+let skipping = false;
+let lastSeq = null;   // { A?, B?, C } — the last thing animated, for Replay
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const running = new Set();
+const waiters = new Set();
+const fx = document.createElement('div');
+fx.className = 'fx';
+document.body.appendChild(fx);
+
+// ---- sound: shared with Chess (sfx.js) ----
+const sfx = window.Sfx;
+sfx.setQuiet(() => skipping);
+const buzz = sfx.buzz;
+
+// A tap during an animation skips it (and is swallowed so it can't make a move).
+document.addEventListener('click', e => {
+  if (!busy || e.target.closest('.watch')) return;
+  e.stopPropagation();
+  e.preventDefault();
+  skipAnim();
+}, true);
+
+function wait(ms) {
+  if (skipping) return Promise.resolve();
+  return new Promise(res => {
+    const done = () => { waiters.delete(done); clearTimeout(t); res(); };
+    const t = setTimeout(done, ms);
+    waiters.add(done);
+  });
+}
+function anim(el, frames, opts) {
+  if (!el) return Promise.resolve();
+  const a = el.animate(frames, opts);
+  return new Promise(res => {
+    const done = () => { clearTimeout(t); running.delete(done); res(); };
+    // Watchdog: a page that stops painting never fires `finished`; don't let that lock input.
+    const t = setTimeout(() => { try { a.finish(); } catch {} done(); }, (opts.delay || 0) + opts.duration + 800);
+    done.anim = a;
+    running.add(done);
+    a.finished.then(done, done);
+    if (skipping) { try { a.finish(); } catch {} done(); }
+  });
+}
+function skipAnim() {
+  if (!busy || skipping) return;
+  skipping = true;
+  [...waiters].forEach(f => f());
+  running.forEach(done => { try { done.anim.finish(); } catch {} done(); });
+}
+function stopAnim() {
+  skipAnim();
+  document.querySelectorAll('.tally, .watch').forEach(e => e.remove());
+}
+
+const boardEl = p => app.querySelector(`[data-p="${p}"]`);
+const q = (root, s) => (root ? root.querySelector(s) : null);
+const cloneCls = el => el.className.replace(/\b(faint|on|dim|pick|line)\b/g, '');
+const hide = el => { if (el) el.style.visibility = 'hidden'; };
+const show = el => { if (el) el.style.visibility = ''; };
+
+// Clone a tile at rect `a` and arc it onto element `to`.
+function fly(a, cls, to, { delay = 0, dur = 430, arc = 36, spin = 0 } = {}) {
+  if (skipping || !to) return Promise.resolve();
+  const b = to.getBoundingClientRect();
+  const d = document.createElement('div');
+  d.className = cls + ' flying';
+  Object.assign(d.style, { left: a.left + 'px', top: a.top + 'px', width: a.width + 'px', height: a.height + 'px' });
+  fx.appendChild(d);
+  const dx = b.left + b.width / 2 - (a.left + a.width / 2), dy = b.top + b.height / 2 - (a.top + a.height / 2);
+  const k = b.width / a.width;
+  return anim(d, [
+    { transform: 'translate(0,0) scale(1) rotate(0deg)' },
+    { transform: `translate(${dx * 0.5}px, ${dy * 0.5 - arc}px) scale(${((1 + k) / 2) * 1.2}) rotate(${spin}deg)`, offset: 0.5 },
+    { transform: `translate(${dx}px, ${dy}px) scale(${k}) rotate(0deg)` },
+  ], { duration: dur, delay, easing: 'cubic-bezier(.45,.05,.35,1)', fill: 'both' }).then(() => d.remove());
+}
+const squash = (el, delay = 0) => anim(el, [{ transform: 'scale(1.3)' }, { transform: 'scale(.88)' }, { transform: 'scale(1)' }], { duration: 280, delay, easing: 'ease-out' });
+const glow = (el, delay = 0) => anim(el, [
+  { transform: 'scale(1)', filter: 'brightness(1)' },
+  { transform: 'scale(1.2)', filter: 'brightness(1.7) drop-shadow(0 0 6px #fab387)' },
+  { transform: 'scale(1)', filter: 'brightness(1)' },
+], { duration: 520, delay, easing: 'ease-out' });
+
+function floatText(el, text, kind = 'plus', size) {
+  if (skipping || !el) return;
+  const r = el.getBoundingClientRect();
+  const d = document.createElement('div');
+  d.className = 'float ' + kind;
+  d.textContent = text;
+  d.style.left = r.left + r.width / 2 + 'px';
+  d.style.top = r.top - 4 + 'px';
+  if (size) d.style.fontSize = size + 'px';
+  fx.appendChild(d);
+  anim(d, [
+    { transform: 'translate(-50%, 0) scale(.5)', opacity: 0 },
+    { transform: 'translate(-50%, -14px) scale(1.15)', opacity: 1, offset: 0.25 },
+    { transform: 'translate(-50%, -42px) scale(1)', opacity: 0 },
+  ], { duration: 1150, easing: 'ease-out', fill: 'both' }).then(() => d.remove());
+}
+
+function countUp(el, from, to, dur = 450) {
+  if (!el) return;
+  if (skipping || from === to) { el.textContent = to; return; }
+  const t0 = performance.now();
+  const step = t => {
+    const k = Math.min(1, (t - t0) / dur);
+    el.textContent = Math.round(from + (to - from) * (1 - Math.pow(1 - k, 3)));
+    if (k < 1 && !skipping) requestAnimationFrame(step);
+    else el.textContent = to;
+  };
+  requestAnimationFrame(step);
+  anim(el, [{ transform: 'scale(1)' }, { transform: 'scale(1.3)' }, { transform: 'scale(1)' }], { duration: 380 });
+}
+
+function banner(text) {
+  if (skipping || RM) return;
+  const d = document.createElement('div');
+  d.className = 'banner';
+  d.textContent = text;
+  fx.appendChild(d);
+  anim(d, [
+    { transform: 'translateX(-60%) skewX(-12deg)', opacity: 0 },
+    { transform: 'translateX(0) skewX(0)', opacity: 1, offset: 0.2 },
+    { transform: 'translateX(0) scale(1.04)', opacity: 1, offset: 0.75 },
+    { transform: 'translateX(60%) skewX(12deg)', opacity: 0 },
+  ], { duration: 1500, easing: 'ease-in-out', fill: 'both' }).then(() => d.remove());
+}
+
+// A rain of tiles.
+function confetti(n = 80) {
+  if (RM) return;
+  for (let i = 0; i < n; i++) {
+    const d = document.createElement('div');
+    const size = 10 + Math.random() * 14;
+    d.className = 't t' + (i % 5) + ' confetto';
+    Object.assign(d.style, { left: Math.random() * innerWidth + 'px', top: '-30px', width: size + 'px', height: size + 'px' });
+    fx.appendChild(d);
+    const dx = (Math.random() - 0.5) * 180, rot = (Math.random() - 0.5) * 900;
+    d.animate([{ transform: 'translate(0,0) rotate(0deg)' }, { transform: `translate(${dx}px, ${innerHeight + 80}px) rotate(${rot}deg)` }],
+      { duration: 1800 + Math.random() * 1600, delay: Math.random() * 700, easing: 'cubic-bezier(.25,.6,.5,1)', fill: 'both' })
+      .finished.then(() => d.remove()).catch(() => {});
+  }
+}
+
+// ---- move: picked tiles arc to the line/floor, leftovers slide to the center ----
+async function playMove(A, B) {
+  const L = B.last, p = L.p;
+  const srcSel = L.src === M.SRC_CENTER ? `[data-tile="c-${L.c}"]` : `[data-tile="f${L.src}-${L.c}"]`;
+  const picked = [...app.querySelectorAll(srcSel)].map(el => ({ r: el.getBoundingClientRect(), cls: cloneCls(el) }));
+  const mk = L.marker ? q(app, '[data-tile="cm"]') : null;
+  const mkRect = mk && mk.getBoundingClientRect();
+  const rest = L.src === M.SRC_CENTER ? [] : [...app.querySelectorAll(`[data-tile^="f${L.src}-"]`)]
+    .filter(el => !el.matches(srcSel))
+    .map(el => ({ r: el.getBoundingClientRect(), cls: cloneCls(el), c: +el.dataset.tile.split('-')[1] }));
+
+  view = B; phase = 'move';
+  renderGame();
+  const bd = boardEl(p);
+  const n0 = L.dst === M.DST_FLOOR ? 0 : A.players[p].lines[L.dst].n;
+  const dests = [];
+  for (let i = 0; i < L.k - L.toFloor; i++) dests.push(q(bd, `[data-l="${L.dst}-${n0 + i}"]`));
+  let f = A.players[p].floor.length;
+  const mkDest = L.marker && f < 7 ? q(bd, `[data-f="${f++}"]`) : null;
+  for (let i = 0; i < L.toFloor; i++) dests.push(f < 7 ? q(bd, `[data-f="${f++}"]`) : null);
+  // Leftovers land on the newest center tiles of their color.
+  const centerDest = [];
+  for (let c = 0; c < 5; c++) {
+    const els = [...app.querySelectorAll(`[data-tile="c-${c}"]`)];
+    const added = B.center[c] - A.center[c];
+    if (L.src !== M.SRC_CENTER && added > 0) centerDest[c] = els.slice(-added);
+  }
+  dests.forEach(hide); hide(mkDest);
+  centerDest.forEach(list => list && list.forEach(hide));
+
+  const jobs = [];
+  picked.forEach((t, i) => {
+    const to = dests[i];
+    jobs.push(fly(t.r, t.cls, to, { delay: i * 85, spin: 10 }).then(() => {
+      show(to);
+      if (!to) return;
+      squash(to);
+      buzz(8);
+      if (to.dataset.f != null) { sfx.clack(0, 0.6, 1.1); floatText(to, M.FLOOR_PEN[+to.dataset.f], 'minus', 13); }
+      else sfx.clack(0, 0.85 + i * 0.06, 1);
+    }));
+  });
+  if (mkRect) jobs.push(fly(mkRect, 'tm t', mkDest, { delay: 60, spin: -20 }).then(() => { show(mkDest); squash(mkDest); sfx.pop(); }));
+  const used = [0, 0, 0, 0, 0];
+  rest.forEach((t, j) => {
+    const to = centerDest[t.c] && centerDest[t.c][used[t.c]++];
+    jobs.push(fly(t.r, t.cls, to, { delay: 140 + j * 50, arc: 16, dur: 380 }).then(() => { show(to); sfx.clack(0, 1.15, 0.45); }));
+  });
+  await Promise.all(jobs);
+  app.querySelectorAll('[style*="visibility"]').forEach(show);
+}
+
+// ---- round end: full lines slide onto the wall, runs light up, floor tiles fall ----
+async function playScoring(B, C) {
+  view = B; phase = 'score';
+  renderGame();
+  await wait(450);
+  const vi = viewIdx();
+  const steps = B.players.map(pl => M.scoreSteps(pl));
+  const score = B.players.map(pl => pl.score);
+  const most = Math.max(0, ...steps.map(x => x.length));
+  for (let k = 0; k < most; k++) {
+    let sounded = false;
+    for (let p = 0; p < B.n; p++) {
+      const st = steps[p][k];
+      if (!st) continue;
+      const bd = boardEl(p), big = bd.classList.contains('board');
+      const line = [];
+      for (let j = 0; j <= st.r; j++) line.push(q(bd, `[data-l="${st.r}-${j}"]`));
+      const wallEl = q(bd, `[data-w="${st.r * 5 + st.col}"]`);
+      const lead = line[0], from = lead.getBoundingClientRect(), cls = cloneCls(lead);
+      lead.className = (big ? 'slot' : 'ms') + ' line';
+      line.slice(1).forEach((el, j) => anim(el, [
+        { opacity: 1, transform: 'none' },
+        { opacity: 0, transform: 'translateY(12px) scale(.6) rotate(25deg)' },
+      ], { duration: 420, delay: 220 + j * 45, easing: 'ease-in', fill: 'forwards' }));
+      const loud = p === vi || !sounded;
+      sounded = true;
+      fly(from, cls, wallEl, { dur: 380, arc: big ? 18 : 6 }).then(() => {
+        wallEl.classList.remove('faint');
+        squash(wallEl);
+        st.run.forEach((w, i) => glow(q(bd, `[data-w="${w}"]`), 80 + i * 40));
+        floatText(wallEl, '+' + st.pts, 'plus', big ? 20 : 13);
+        countUp(q(bd, '[data-score]'), score[p], score[p] + st.pts);
+        score[p] += st.pts;
+        if (loud) { sfx.chime(Math.min(st.pts + 1, 11), 0, p === vi ? 1 : 0.5); buzz(10); }
+      });
+    }
+    await wait(720);
+  }
+
+  let pain = false;
+  for (let p = 0; p < B.n; p++) {
+    const fl = B.players[p].floor;
+    if (!fl.length) continue;
+    pain = true;
+    const bd = boardEl(p), big = bd.classList.contains('board');
+    const tiles = [...bd.querySelectorAll('[data-f]')].filter(el => el.classList.contains('t'));
+    tiles.forEach((el, i) => {
+      anim(el, [{ transform: 'translateX(0)' }, { transform: 'translateX(-3px) rotate(-6deg)' }, { transform: 'translateX(3px) rotate(6deg)' }, { transform: 'translateX(0)' }], { duration: 280, delay: i * 40 });
+      anim(el, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(22px) rotate(30deg)' }], { duration: 480, delay: 320 + i * 50, easing: 'ease-in', fill: 'forwards' });
+    });
+    const pen = M.floorPenalty(fl), to = Math.max(0, score[p] + pen);
+    floatText(q(bd, '.floor, .mfloor'), String(pen), 'minus', big ? 22 : 14);
+    countUp(q(bd, '[data-score]'), score[p], to);
+    score[p] = to;
+  }
+  if (pain) { sfx.thud(0.3); buzz(35); await wait(1000); }
+  await wait(250);
+}
+
+// ---- new round: factories fill with a clatter ----
+async function playRefill(s) {
+  phase = 'refill';
+  banner(s.round === 1 && s.turn === 0 ? 'Let’s play' : `Round ${s.round}`);
+  sfx.whoosh();
+  const tiles = [...app.querySelectorAll('.factory .t')];
+  const start = RM ? 0 : 350;
+  tiles.forEach((el, i) => {
+    anim(el, [
+      { transform: 'scale(0) rotate(-120deg)', opacity: 0 },
+      { transform: 'scale(1.18) rotate(8deg)', opacity: 1, offset: 0.7 },
+      { transform: 'scale(1) rotate(0deg)', opacity: 1 },
+    ], { duration: 380, delay: start + i * 30, easing: 'ease-out', fill: 'backwards' });
+    if (i % 2 === 0) sfx.clack((start + i * 30) / 1000, 1.1, 0.4);
+  });
+  const mk = q(app, '[data-tile="cm"]');
+  anim(mk, [{ transform: 'scale(0)' }, { transform: 'scale(1.3)' }, { transform: 'scale(1)' }], { duration: 400, delay: start + tiles.length * 30, fill: 'backwards' });
+  sfx.pop((start + tiles.length * 30) / 1000);
+  await wait(start + tiles.length * 30 + 450);
+}
+
+// Plays one turn: the move (A → B), round scoring (B → C), refill, final tally.
+// live: the mover just tapped, so A is already on screen.
+async function animateTurn(seq, live) {
+  if (!seq || busy) return;
+  lastSeq = seq;
+  busy = true;
+  skipping = RM;
+  const C = seq.C;
+  const scored = !!(seq.B && C.last && C.last.roundEnd);
+  try {
+    if (seq.A) {
+      if (!live) { view = seq.A; phase = 'move'; renderGame(); await wait(500); }
+      await playMove(seq.A, seq.B);
+      if (!scored && !M.finishers(seq.A).length && M.finishers(seq.B).length) { banner('Last round'); sfx.whoosh(); await wait(1500); }
+      await wait(scored ? 450 : 150);
+    }
+    if (scored) await playScoring(seq.B, C);
+    view = null;
+    renderGame();
+    if (scored && !C.over) { skipping = RM; await playRefill(C); }
+  } finally {
+    fx.querySelectorAll('.flying, .float').forEach(e => e.remove());
+    view = null; phase = null; busy = false; skipping = false;
+  }
+  renderGame();
+  if (C.over) finalTally(C);
+  else if (!seq.A && !seq.B) pulseLast(C);
+}
+
+// No earlier board to replay from: just light up what the last player placed.
+function pulseLast(s) {
+  const L = s.last;
+  if (!L || L.roundEnd) return;
+  const bd = boardEl(L.p);
+  const els = L.dst === M.DST_FLOOR ? [] : [...bd.querySelectorAll(`[data-l^="${L.dst}-"]`)].filter(el => el.classList.contains('t'));
+  els.forEach((el, i) => glow(el, 300 + i * 70));
+}
+
+// What to animate when a link arrives, given what this phone last saw (P).
+function buildSeq(P, s) {
+  const L = s.last;
+  if (!L) return s.over ? { C: s } : null;
+  const move = { src: L.src, c: L.c, dst: L.dst };
+  if (P && P.turn === s.turn - 1) {
+    try {
+      if (M.encode(M.applyMove(P, move)) === M.encode(s)) return { A: P, B: M.applyMove(P, move, true), C: s };
+    } catch {}
+  }
+  if (L.roundEnd && P && !P.over && P.turn < s.turn && P.round === (s.over ? s.round : s.round - 1)) {
+    const B = boardsBeforeScoring(P, s);
+    if (B) return { B, C: s };
+  }
+  return { C: s };
+}
+
+// Rebuild the boards just before round scoring from an earlier state of the same round.
+// Walls and scores only change at round end, so P has both; the new wall tiles tell
+// which lines were full. Floor colors are unknown (grey), its length comes from the penalty.
+function boardsBeforeScoring(P, s) {
+  const B = JSON.parse(JSON.stringify(s));
+  B.over = false; B.round = P.round; B.cur = s.last.p; B.centerMarker = false;
+  B.factories = B.factories.map(() => [0, 0, 0, 0, 0]);
+  B.center = [0, 0, 0, 0, 0];
+  B.last = { ...s.last, roundEnd: null };
+  const CUM = [0, 1, 2, 4, 6, 8, 11, 14];
+  for (let i = 0; i < s.n; i++) {
+    const pb = B.players[i], old = P.players[i].wall, nw = s.players[i].wall;
+    if (old.some((w, j) => w && !nw[j])) return null;
+    pb.wall = old.slice();
+    pb.score = P.players[i].score;
+    for (let r = 0; r < 5; r++) {
+      const added = [0, 1, 2, 3, 4].filter(c => nw[r * 5 + c] && !old[r * 5 + c]);
+      if (added.length > 1) return null;
+      if (added.length) pb.lines[r] = { c: M.wallColor(r, added[0]), n: r + 1 };
+    }
+    const len = CUM.indexOf(-s.last.roundEnd[i].floor);
+    if (len < 0) return null;
+    pb.floor = Array.from({ length: len }, (_, k) => (k === 0 && i === s.first ? M.MARKER : 9));
+    if (M.scoreSteps(pb).reduce((a, x) => a + x.pts, 0) !== s.last.roundEnd[i].wall) return null;
+  }
+  return B;
+}
+
+// Sound needs one tap on iOS, so a fresh link asks before playing.
+function offerWatch(seq) {
+  if (!seq) return;
+  if (sfx.ready() || sfx.muted || RM) { animateTurn(seq); return; }
+  const C = seq.C, who = C.last ? esc(C.names[C.last.p]) : '';
+  const label = !seq.A && !seq.B ? 'See the final scoring'
+    : seq.A ? `Watch ${who}’s move${C.last.roundEnd ? ' + scoring' : ''}` : 'Watch the round scoring';
+  const m = document.createElement('div');
+  m.className = 'watch';
+  m.innerHTML = `<button class="btn" id="wgo">▶ ${label}</button><button class="muted" id="wskip">Skip</button>`;
+  document.body.appendChild(m);
+  m.querySelector('#wgo').onclick = () => { sfx.unlock(); m.remove(); animateTurn(seq); };
+  m.querySelector('#wskip').onclick = () => { m.remove(); lastSeq = seq; render(); };
+}
+
+// ---- game over: every wall, bonus by bonus, then the podium ----
+async function finalTally(s) {
+  if (busy) return;
+  busy = true;
+  skipping = RM;
+  const m = document.createElement('div');
+  m.className = 'tally';
+  m.innerHTML = `<div class="tsheet"><div class="kicker"><span>Final scoring</span><span id="thint">tap to skip</span></div><div id="tbody"></div></div>`;
+  document.body.appendChild(m);
+  const body = m.querySelector('#tbody');
+  try {
+    for (let i = 0; i < s.n; i++) {
+      const p = s.players[i], b = M.bonuses(p);
+      let sc = p.score - b.points;
+      fx.querySelectorAll('.float').forEach(e => e.remove());
+      let cells = '';
+      for (let w = 0; w < 25; w++) cells += tile(M.wallColor(Math.floor(w / 5), w % 5), p.wall[w] ? '' : 'faint', `data-tw="${w}"`);
+      body.innerHTML = `<div class="tname">${esc(s.names[i])}</div><div class="tscore"><span id="ts">${sc}</span></div>
+        <div class="twall">${cells}</div><div class="tlog" id="tlog"></div>`;
+      const ts = body.querySelector('#ts'), log = body.querySelector('#tlog');
+      anim(body, [{ opacity: 0, transform: 'translateX(40px)' }, { opacity: 1, transform: 'none' }], { duration: 320, easing: 'ease-out' });
+      await wait(650);
+      const groups = [
+        ...b.rowList.map(r => ({ cells: [0, 1, 2, 3, 4].map(c => r * 5 + c), pts: 2, text: `Row ${r + 1} complete`, base: 0 })),
+        ...b.colList.map(c => ({ cells: [0, 1, 2, 3, 4].map(r => r * 5 + c), pts: 7, text: `Column ${c + 1} complete`, base: 2 })),
+        ...b.colorList.map(k => ({ cells: [0, 1, 2, 3, 4].map(r => r * 5 + M.wallCol(r, k)), pts: 10, text: `All five ${COLOR_NAMES[k]}`, base: 4 })),
+      ];
+      if (!groups.length) { log.innerHTML = '<div>No bonuses</div>'; await wait(900); }
+      for (const g of groups) {
+        g.cells.forEach((w, j) => {
+          const el = q(body, `[data-tw="${w}"]`);
+          el.classList.add('lit');
+          anim(el, [
+            { transform: 'none', filter: 'brightness(1)' },
+            { transform: 'translateY(-10px) scale(1.18)', filter: 'brightness(1.6)' },
+            { transform: 'none', filter: 'brightness(1)' },
+          ], { duration: 440, delay: j * 75, easing: 'ease-out' });
+        });
+        sfx.arp(g.base);
+        buzz(15);
+        await wait(380);
+        floatText(ts, '+' + g.pts, 'bonus', 30);
+        countUp(ts, sc, sc + g.pts, 500);
+        sc += g.pts;
+        log.insertAdjacentHTML('beforeend', `<div>${g.text} <b>+${g.pts}</b></div>`);
+        await wait(700);
+        body.querySelectorAll('.lit').forEach(el => el.classList.remove('lit'));
+      }
+      ts.textContent = p.score;
+      await wait(800);
+    }
+    skipping = false;
+    const st = M.standings(s), win = M.winners(s);
+    const medal = ['🥇', '🥈', '🥉', '4'];
+    body.innerHTML = `<div class="tname" style="margin-bottom:14px">${win.length > 1 ? 'It’s a tie!' : esc(s.names[win[0]]) + ' wins!'}</div>
+      <div class="podium">${st.map((x, k) => `<div class="prow ${win.includes(x.i) ? 'win' : ''}" data-k="${k}" style="opacity:0">
+        <span class="medal">${win.includes(x.i) ? (win.length > 1 ? '🤝' : '👑') : medal[k]}</span><span>${esc(x.name)}</span><span class="pts">${x.score}</span></div>`).join('')}</div>
+      <button class="btn" id="tdone" style="width:100%;margin-top:18px;opacity:0">Done</button>`;
+    for (let k = st.length - 1; k >= 0; k--) {
+      const row = q(body, `[data-k="${k}"]`);
+      row.style.opacity = '';
+      anim(row, [{ opacity: 0, transform: 'translateY(16px) scale(.95)' }, { opacity: 1, transform: 'none' }], { duration: 380, easing: 'cubic-bezier(.3,1.5,.5,1)' });
+      if (k === 0) { if (G.bots && !win.includes(G.me)) sfx.sad(); else { sfx.fanfare(); confetti(); } buzz(60); } // losing to the computer gets no confetti
+      else sfx.pop();
+      await wait(k === 0 ? 300 : 550);
+    }
+  } finally {
+    busy = false; skipping = false;
+  }
+  m.querySelector('#thint').textContent = '';
+  const done = q(body, '#tdone');
+  if (done) { done.style.opacity = ''; done.onclick = () => m.remove(); }
+  else m.remove();
+  renderGame();
+}
+
+// ---- rendering ----
+function render() {
+  if (screen === 'home') renderHome();
+  else if (screen === 'new') renderNew();
+  else renderGame();
+}
+
+function bar(inner) {
+  let b = document.querySelector('.bar');
+  if (!inner) { if (b) b.remove(); return; }
+  if (!b) { b = document.createElement('div'); b.className = 'bar'; document.body.appendChild(b); }
+  b.innerHTML = `<div class="in">${inner}</div>`;
+}
+
+function renderHome() {
+  const games = listGames();
+  app.innerHTML = `
+    <div class="topbar"><a class="back" href="../">‹ All games</a><button id="theme" aria-label="Colors" style="font-size:20px">🎨</button></div>
+    <h1 style="margin-top:0">Mosaic</h1>
+    <div class="muted" style="margin-bottom:18px">Tile drafting by text message</div>
+    <div class="row" style="margin-bottom:16px">
+      <button class="btn grow" id="new">New game</button>
+      <button class="btn ghost grow" id="paste">Paste a link</button>
+    </div>
+    ${games.length ? `<div class="kicker">Games</div>` : ''}
+    ${games.map(g => {
+      const s = g.s;
+      let st;
+      if (s.over) st = `<span class="pill">Finished · ${esc(M.winners(s).map(i => s.names[i]).join(' & '))} won</span>`;
+      else if (g.hotseat || g.me === s.cur) st = `<span class="pill go">Your turn</span>`;
+      else st = `<span class="pill">${esc(s.names[s.cur])}'s turn</span>`;
+      return `<div class="card"><div class="row">
+        <button class="game-item grow" data-open="${s.id}">
+          <div class="grow"><div class="names">${s.names.map(esc).join(' · ')}</div>
+          <div class="muted" style="font-size:13px">Round ${s.round} · move ${s.turn}</div></div>${st}
+        </button>
+        <button class="muted" data-del="${s.id}" aria-label="Remove" style="padding:6px 2px 6px 8px">✕</button></div></div>`;
+    }).join('')}
+    <div class="card how">
+      <b>How it works.</b> Every move makes a link. Send it to the group text; whoever's next taps it and plays.
+      The link carries the whole game, so nobody falls behind — and an old link can't overwrite a newer one.
+      Nothing is stored online.
+      <br><br><b>Solo?</b> New game › <b>Computer</b> plays 1–3 opponents (Easy, Medium, Hard), offline too.
+    </div>`;
+  bar(null);
+  app.querySelector('#new').onclick = () => { screen = 'new'; render(); };
+  app.querySelector('#paste').onclick = askPaste;
+  app.querySelector('#theme').onclick = Theme.open;
+  app.querySelectorAll('[data-open]').forEach(b => b.onclick = () => {
+    G = loadGame(+b.dataset.open); sel = null; pending = null; screen = 'game'; render();
+    if (G.me == null && !G.hotseat && !G.bots) askWho();
+    botTurn();
+  });
+  app.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+    if (confirm('Remove this game from this phone? (Others keep their copy.)')) { store.del(gkey(b.dataset.del)); render(); }
+  });
+}
+
+function renderNew() {
+  const f = newForm;
+  app.innerHTML = `
+    <div class="topbar"><button class="back" id="back">‹ Games</button><div></div></div>
+    <h1 style="margin-top:0">New game</h1>
+    <div class="card">
+      <div class="kicker">Players</div>
+      <div class="seg">${[2, 3, 4].map(n => `<button data-n="${n}" class="${f.n === n ? 'on' : ''}">${n}</button>`).join('')}</div>
+      <div class="kicker" style="margin-top:14px">Opponents</div>
+      <div class="seg">${[['friend', 'By text'], ['phone', 'Same phone'], ['computer', 'Computer']].map(([v, l]) => `<button data-o="${v}" class="${f.opp === v ? 'on' : ''}">${l}</button>`).join('')}</div>
+      ${f.opp === 'computer' ? `<div class="kicker" style="margin-top:14px">Computer level</div>
+      <div class="seg">${Object.entries(LEVEL_NAME).map(([v, l]) => `<button data-l="${v}" class="${f.level === v ? 'on' : ''}">${l}</button>`).join('')}</div>` : ''}
+      <div class="stack" style="margin-top:12px">
+        ${Array.from({ length: f.opp === 'computer' ? 1 : f.n }, (_, i) => `<input type="text" data-name="${i}" maxlength="16" placeholder="${i === 0 ? 'You' : 'Player ' + (i + 1)}" value="${esc(f.names[i])}">`).join('')}
+      </div>
+      <div class="muted" style="font-size:13px;margin-top:8px">${f.opp === 'computer'
+        ? `You go first, against ${f.n - 1} computer${f.n > 2 ? 's' : ''}.` : 'Turn order is top to bottom. First name is you.'}</div>
+    </div>`;
+  bar(`<button class="btn grow" id="start">Start game</button>`);
+  app.querySelector('#back').onclick = () => { screen = 'home'; render(); };
+  app.querySelectorAll('[data-n]').forEach(b => b.onclick = () => { f.n = +b.dataset.n; render(); });
+  app.querySelectorAll('[data-name]').forEach(inp => inp.oninput = () => { f.names[+inp.dataset.name] = inp.value; });
+  app.querySelectorAll('[data-o]').forEach(b => b.onclick = () => { f.opp = b.dataset.o; render(); });
+  app.querySelectorAll('[data-l]').forEach(b => b.onclick = () => { f.level = b.dataset.l; render(); });
+  document.getElementById('start').onclick = () => {
+    const bot = f.opp === 'computer';
+    const names = bot
+      ? [f.names[0].trim() || 'You', ...Array.from({ length: f.n - 1 }, (_, i) => f.n > 2 ? `Computer ${i + 1}` : 'Computer')]
+      : f.names.slice(0, f.n).map((x, i) => x.trim() || (i === 0 ? 'You' : 'Player ' + (i + 1)));
+    const r = new Uint32Array(2);
+    crypto.getRandomValues(r);
+    G = { state: M.newGame(names, r[0], r[1]), me: 0, hotseat: f.opp === 'phone', bots: bot ? names.map((_, i) => (i ? f.level : null)) : null };
+    store.set('mosaic:name', names[0]);
+    sel = null; pending = null; lastSeq = null; screen = 'game';
+    saveGame(); render();
+    busy = true; phase = 'refill'; render();
+    playRefill(G.state).then(() => { busy = false; phase = null; render(); botTurn(); });
+  };
+}
+
+function lineCells(L, r, big) {
+  let h = '';
+  for (let j = 0; j < 5; j++) {
+    if (j < 4 - r) { h += `<div class="${big ? 'slot' : 'ms'} blank"></div>`; continue; }
+    const k = 4 - j; // distance from the wall; lines fill toward it
+    const at = `data-l="${r}-${k}"`;
+    h += k < L.n ? tile(L.c, big ? 'slot' : 'ms', at) : `<div class="${big ? 'slot' : 'ms'} line" ${at}></div>`;
+  }
+  return h;
+}
+
+function wallCells(p, r, big) {
+  let h = '';
+  for (let c = 0; c < 5; c++) {
+    const col = M.wallColor(r, c);
+    h += tile(col, (big ? 'slot ' : 'ms ') + (p.wall[r * 5 + c] ? '' : 'faint'), `data-w="${r * 5 + c}"`);
+  }
+  return h;
+}
+
+function miniBoard(s, i) {
+  const p = s.players[i];
+  let rows = '';
+  for (let r = 0; r < 5; r++) rows += `<div class="mrow">${lineCells(p.lines[r], r, false)}<div class="ms gap"></div>${wallCells(p, r, false)}</div>`;
+  return `<div class="mini ${!s.over && i === s.cur ? 'active' : ''}" data-p="${i}">
+    <div class="mhead"><span>${esc(s.names[i])}</span><b data-score>${p.score}</b></div>${rows}
+    <div class="mfloor">${p.floor.map((t, k) => tile(t, 'ms', `data-f="${k}"`)).join('')}</div></div>`;
+}
+
+function bigBoard(s, i, canSel) {
+  const p = s.players[i];
+  let rows = '';
+  for (let r = 0; r < 5; r++) {
+    const can = canSel && M.canPlace(p, r, sel.c);
+    rows += `<div class="brow ${can ? 'can' : ''}" ${can ? `data-row="${r}"` : ''}>
+      <div class="cells">${lineCells(p.lines[r], r, true)}</div><div class="arrow">›</div><div class="cells">${wallCells(p, r, true)}</div></div>`;
+  }
+  let floor = '';
+  for (let k = 0; k < 7; k++) {
+    const t = p.floor[k];
+    floor += `<div class="fslot">${t === undefined ? `<div class="slot line" data-f="${k}"></div>` : tile(t, 'slot', `data-f="${k}"`)}<div class="pen">${M.FLOOR_PEN[k]}</div></div>`;
+  }
+  const label = G.hotseat || G.me === i ? (G.hotseat ? esc(s.names[i]) : 'You') : esc(s.names[i]);
+  return `<div class="card board" data-p="${i}">
+    <div class="bhead"><div class="bname">${label}</div><div class="score" data-score>${p.score}</div></div>
+    ${rows}
+    <div class="floor ${canSel ? 'can' : ''}" ${canSel ? `data-row="${M.DST_FLOOR}"` : ''}>${floor}</div></div>`;
+}
+
+function factoriesHtml(s, interactive) {
+  const fx = s.factories.map((f, i) => {
+    const tiles = [];
+    f.forEach((n, c) => { for (let k = 0; k < n; k++) tiles.push(c); });
+    let hop = 0;
+    const inner = tiles.map(c => {
+      const on = sel && sel.src === i && sel.c === c, dim = sel && sel.src === i && sel.c !== c;
+      return `<button class="t t${c} pick ${on ? 'on' : ''} ${dim ? 'dim' : ''}" data-tile="f${i}-${c}" ${on ? `style="--i:${hop++}"` : ''} ${interactive ? `data-src="${i}" data-c="${c}"` : ''} aria-label="${COLOR_NAMES[c]}"></button>`;
+    }).join('');
+    return `<div class="factory ${tiles.length ? '' : 'empty'}"><span class="num">${i + 1}</span>${inner}</div>`;
+  }).join('');
+  const ctiles = [];
+  s.center.forEach((n, c) => { for (let k = 0; k < n; k++) ctiles.push(c); });
+  let hop = 0;
+  const cinner = (s.centerMarker ? tile(M.MARKER, '', 'data-tile="cm"') : '') + ctiles.map(c => {
+    const on = sel && sel.src === M.SRC_CENTER && sel.c === c, dim = sel && sel.src === M.SRC_CENTER && sel.c !== c;
+    return `<button class="t t${c} pick ${on ? 'on' : ''} ${dim ? 'dim' : ''}" data-tile="c-${c}" ${on ? `style="--i:${hop++}"` : ''} ${interactive ? `data-src="${M.SRC_CENTER}" data-c="${c}"` : ''} aria-label="${COLOR_NAMES[c]}"></button>`;
+  }).join('');
+  return `<div class="factories">${fx}</div><div class="center"><div class="label">Center</div>${cinner || '<span class="muted" style="font-size:13px">empty</span>'}</div>`;
+}
+
+function summaryHtml(s) {
+  const L = s.last;
+  if (!L || !L.roundEnd) return '';
+  const lines = L.roundEnd.map((r, i) => {
+    const parts = [`+${r.wall} wall`];
+    if (r.floor) parts.push(`${r.floor} floor`);
+    if (r.bonus) parts.push(`+${r.bonus} bonus`);
+    return `<div><span>${esc(s.names[i])}</span><span class="muted">${parts.join(' · ')} → <b style="color:var(--text)">${s.players[i].score}</b></span></div>`;
+  }).join('');
+  return `<div class="summary"><div class="kicker" style="margin:0">Round ${s.over ? s.round : s.round - 1} scored</div>${lines}</div>`;
+}
+
+function statusHtml(s) {
+  let big;
+  const mover = s.last && (s.last.p === G.me && !G.hotseat ? 'You' : esc(s.names[s.last.p]));
+  if (phase === 'move') big = `${mover} ${mover === 'You' ? 'play' : 'plays'}…`;
+  else if (phase === 'score') big = `Round ${s.round} scoring`;
+  else if (phase === 'refill') big = `Round ${s.round}`;
+  else if (s.over) {
+    const w = M.winners(s).map(i => s.names[i]);
+    big = `🏆 ${esc(w.join(' & '))} ${w.length > 1 ? 'tie' : 'wins'}`;
+  } else if (pending) big = 'Check your move';
+  else if (G.bots && G.bots[s.cur]) big = `${esc(s.names[s.cur])} is thinking…`;
+  else if (myTurn()) big = G.hotseat ? `${esc(s.names[s.cur])}'s turn` : 'Your turn';
+  else big = `Waiting for ${esc(s.names[s.cur])}`;
+  const last = moveText(s);
+  let extra = '';
+  const fin = s.over || phase === 'score' ? [] : M.finishers(s);
+  if (fin.length) {
+    const who = fin.map(i => (i === G.me && !G.hotseat ? 'You' : esc(s.names[i])));
+    extra = `<div class="final">🏁 Last round — ${who.join(' & ')} will finish a row</div>`;
+  }
+  if (s.over) {
+    extra = `<div class="summary">${M.standings(s).map((x, k) => `<div><span>${k + 1}. ${esc(x.name)}</span><b>${x.score}</b></div>`).join('')}</div>`;
+  }
+  let btn = '';
+  if (!busy && lastSeq && lastSeq.C === (pending || G.state)) btn = `<button class="replay" id="replay">↻ Replay</button>`;
+  else if (!busy && s.over) btn = `<button class="replay" id="tallybtn">▶ Final scoring</button>`;
+  return `<div class="card status">${btn}<div class="big">${big}</div>${last ? `<div class="last">${pending && !busy ? 'You: ' : ''}${esc(last)}</div>` : ''}
+    ${summaryHtml(s)}${extra}</div>`;
+}
+
+function renderGame() {
+  const s = view || pending || G.state;
+  const vi = viewIdx();
+  const interactive = myTurn();
+  const others = s.players.map((_, i) => i).filter(i => i !== vi);
+  app.innerHTML = `
+    <div class="topbar"><button class="back" id="back">‹ Games</button>
+      <span class="row" style="gap:12px"><span class="muted" style="font-size:13px">${s.over ? 'Final' : 'Round ' + s.round} · move ${s.turn}</span>
+      <button id="mute" aria-label="Sound" style="font-size:17px">${sfx.muted ? '🔇' : '🔊'}</button>
+      <button id="theme" aria-label="Colors" style="font-size:17px">🎨</button></span></div>
+    ${statusHtml(s)}
+    <div class="opps" style="grid-template-columns:repeat(${others.length},1fr)">${others.map(i => miniBoard(s, i)).join('')}</div>
+    <div class="card"><div class="kicker"><span>Factories</span>${G.state.bag ? `<span>bag ${G.state.bag.reduce((a, b) => a + b, 0)}</span>` : ''}</div>${factoriesHtml(s, interactive)}</div>
+    ${bigBoard(s, vi, interactive && !!sel)}`;
+
+  let b;
+  if (busy) {
+    b = `<div class="grow muted">Tap anywhere to skip</div>`;
+  } else if (pending) {
+    b = `<button class="btn ghost" id="undo">Undo</button><button class="btn grow" id="send">${G.bots ? 'Done' : G.hotseat ? 'Done — next player' : 'Send move'}</button>`;
+  } else if (s.over) {
+    b = `${G.bots ? '' : '<button class="btn ghost grow" id="sharelink">Share result</button>'}<button class="btn grow" id="again">New game</button>`;
+  } else if (interactive && sel) {
+    const k = M.sourceCounts(s, sel.src)[sel.c];
+    b = `<div class="grow">Place <b>${k} ${COLOR_NAMES[sel.c]}</b> — tap a lit row or the floor</div><button class="btn ghost small" id="cancel">Cancel</button>`;
+  } else if (interactive) {
+    b = `<div class="grow muted">Tap a color in a factory or the center</div>`;
+  } else if (G.bots) {
+    b = `<div class="grow muted">${esc(s.names[s.cur])}'s turn</div>`;
+  } else if (G.state.last && G.state.last.p === G.me) {
+    b = `<div class="grow muted">Sent? If not:</div><button class="btn small" id="sharelink">Send link again</button>`;
+  } else {
+    b = `<div class="grow muted">Tap ${esc(s.names[s.cur])}'s link when it arrives</div><button class="btn ghost small" id="paste">Paste</button>`;
+  }
+  bar(b);
+
+  app.querySelector('#back').onclick = () => { screen = 'home'; sel = null; pending = null; lastSeq = null; render(); };
+  app.querySelectorAll('[data-src]').forEach(el => el.onclick = () => pickTile(+el.dataset.src, +el.dataset.c));
+  app.querySelectorAll('[data-row]').forEach(el => el.onclick = () => placeRow(+el.dataset.row));
+  const on = (id, fn) => { const el = document.getElementById(id); if (el) el.onclick = fn; };
+  on('undo', undo);
+  on('send', commit);
+  on('cancel', () => { sel = null; render(); });
+  on('sharelink', share);
+  on('paste', askPaste);
+  on('mute', () => { sfx.toggle(); render(); });
+  on('theme', Theme.open);
+  on('replay', () => animateTurn(lastSeq));
+  on('tallybtn', () => finalTally(G.state));
+  on('again', () => {
+    newForm.n = G.state.n;
+    if (G.bots) { newForm.opp = 'computer'; newForm.level = G.bots.find(Boolean) || newForm.level; newForm.names[0] = G.state.names[G.me]; }
+    else { newForm.names = G.state.names.slice(); newForm.opp = G.hotseat ? 'phone' : 'friend'; }
+    screen = 'new'; render();
+  });
+}
+
+// ---- boot ----
+function boot() {
+  const code = extractCode(location.hash);
+  if (code) {
+    history.replaceState(null, '', location.pathname);
+    if (ingest(code)) return;
+  }
+  // A reload returns to the open game; a fresh launch starts at the games list.
+  let reload = false;
+  try { reload = !!sessionStorage.getItem('mosaic:seen'); sessionStorage.setItem('mosaic:seen', '1'); } catch {}
+  const open = store.get('mosaic:open');
+  if (open != null && reload) {
+    G = loadGame(open);
+    if (G) { screen = 'game'; render(); botTurn(); return; }
+  }
+  screen = 'home';
+  render();
+}
+window.addEventListener('hashchange', () => { const c = extractCode(location.hash); if (c) { history.replaceState(null, '', location.pathname); ingest(c); } });
+boot();
+
+// Keep a copy of every game on the phone so it opens with no signal (sw.js at the site root).
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('../sw.js', { scope: '../' }).catch(() => {});
+</script>
+</body>
+</html>
