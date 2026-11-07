@@ -1041,6 +1041,9 @@ function boot() {
 window.addEventListener('hashchange', () => { const c = extractCode(location.hash); if (c) { history.replaceState(null, '', location.pathname); ingest(c); } });
 addEventListener('resize', () => { if (screen === 'game' && !busy) render(); });
 boot();
+
+// Keep a copy of every game on the phone so it opens with no signal (sw.js at the site root).
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('../sw.js', { scope: '../' }).catch(() => {});
 </script>
 </body>
 </html>

@@ -609,8 +609,8 @@ tickLast = performance.now();
 addEventListener('hashchange', fromHash);
 if (!fromHash()) render();
 
-// Keep a copy on the phone so it opens with no signal (sw.js).
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+// Keep a copy of every game on the phone so it opens with no signal (../sw.js).
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('../sw.js', { scope: '../' }).catch(() => {});
 </script>
 </body>
 </html>
