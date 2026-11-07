@@ -5,7 +5,7 @@
 const VERSION = 'mosaic-v1';
 const FILES = [
   './', 'index.html', 'engine.js', 'sfx.js', 'theme.js', 'theme.css', 'manifest.json', 'icon.svg', 'icon-180.png', 'icon-512.png',
-  'chess/', 'chess/index.html', 'chess/engine.js', 'chess/pieces.js', 'chess/manifest.json', 'chess/icon.svg', 'chess/icon-180.png', 'chess/icon-512.png',
+  'chess/', 'chess/index.html', 'chess/engine.js', 'chess/pieces.js', 'chess/bot.js', 'chess/manifest.json', 'chess/icon.svg', 'chess/icon-180.png', 'chess/icon-512.png',
   'sixes/', 'sixes/index.html', 'sixes/engine.js', 'sixes/manifest.json', 'sixes/icon.svg', 'sixes/icon-180.png', 'sixes/icon-512.png',
   'sudoku/', 'sudoku/index.html', 'sudoku/engine.js', 'sudoku/manifest.json', 'sudoku/icon.svg', 'sudoku/icon-180.png', 'sudoku/icon-512.png',
 ];
