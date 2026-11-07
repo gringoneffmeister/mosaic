@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1e1e2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Sudoku">
+<meta property="og:title" content="Sudoku — try this puzzle">
+<meta property="og:description" content="Tap to play the same grid">
+<script src="../theme.js"></script>
+<title>Sudoku</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.json">
+<style>
+:root {
+  --bg: #1e1e2e; --mantle: #181825; --crust: #11111b;
+  --surface: #313244; --surface2: #45475a; --overlay: #6c7086;
+  --text: #cdd6f4; --sub: #a6adc8; --peach: #fab387; --green: #a6e3a1; --red: #f38ba8;
+  --blue: #89b4fa;
+  --hl-sel: rgba(137,180,250,.42); --hl-peer: rgba(137,180,250,.09); --hl-same: rgba(137,180,250,.24);
+  --line: #45475a; --line-thick: #7f849c; --sq: var(--mantle);
+  --bw: min(calc(100vw - 32px), 448px);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body { font: 15px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, system-ui, sans-serif; overscroll-behavior: none;
+       -webkit-user-select: none; user-select: none; }
+button { font: inherit; color: inherit; border: 0; background: none; padding: 0; cursor: pointer; touch-action: manipulation; }
+button:disabled { opacity: .45; cursor: default; }
+#app { max-width: 480px; margin: 0 auto; padding: max(12px, env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom)); }
+
+.card { background: var(--surface); border-radius: 16px; padding: 14px; margin-bottom: 12px; }
+.kicker { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--sub); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+.btn { background: var(--peach); color: var(--crust); font-weight: 650; border-radius: 12px; padding: 12px 16px; }
+.btn.ghost { background: var(--surface2); color: var(--text); }
+.row { display: flex; gap: 10px; align-items: center; }
+.grow { flex: 1; }
+.muted { color: var(--sub); }
+.topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; min-height: 30px; }
+.topbar .ttl { font-weight: 700; font-size: 17px; }
+.topbar .icons { display: flex; gap: 14px; font-size: 19px; }
+.back { color: var(--ink-accent, var(--peach)); font-size: 15px; text-decoration: none; }
+.how { font-size: 13px; color: var(--sub); }
+.how b { color: var(--text); }
+.modal { position: fixed; inset: 0; background: rgba(17,17,27,.75); display: grid; place-items: end center; z-index: 10; }
+.modal .sheet { background: var(--surface); width: 100%; max-width: 480px; border-radius: 20px 20px 0 0; padding: 20px 16px calc(20px + env(safe-area-inset-bottom)); }
+.toast { position: fixed; left: 50%; top: max(16px, env(safe-area-inset-top)); transform: translateX(-50%); background: var(--crust); color: var(--text);
+         padding: 10px 14px; border-radius: 12px; z-index: 40; box-shadow: 0 6px 24px rgba(0,0,0,.4); max-width: 90vw; font-size: 14px; text-align: center; }
+
+/* home */
+.hero { font-size: 28px; font-weight: 800; margin: 4px 0 2px; }
+.levels { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.lvl { background: var(--surface2); border-radius: 14px; padding: 14px 12px; text-align: left; }
+.lvl b { display: block; font-size: 16px; }
+.lvl span { font-size: 12px; color: var(--sub); }
+.stats { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 14px; }
+.stats th { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--sub); font-weight: 600; text-align: right; padding: 0 0 6px; }
+.stats th:first-child, .stats td:first-child { text-align: left; }
+.stats td { text-align: right; padding: 5px 0; border-top: 1px solid var(--surface2); }
+.bar-prog { height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+.bar-prog i { display: block; height: 100%; background: var(--peach); border-radius: 3px; }
+
+/* game header */
+.info { display: grid; grid-template-columns: 1fr 1fr 1fr auto; align-items: end; gap: 6px; margin-bottom: 10px; text-align: center; font-variant-numeric: tabular-nums; }
+.info small { display: block; font-size: 11px; color: var(--sub); letter-spacing: .04em; }
+.info b { font-size: 16px; font-weight: 650; }
+.info b.warn { color: var(--red); }
+.pause { width: 34px; height: 34px; border-radius: 50%; background: var(--surface); font-size: 13px; }
+
+/* board */
+.wrap { position: relative; width: var(--bw); margin: 0 auto; }
+.board { width: var(--bw); height: var(--bw); display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 2px; padding: 2px;
+         background: var(--line-thick); border-radius: 10px; overflow: hidden; }
+.boxg { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); min-height: 0; gap: 1px; background: var(--line); }
+.sc { background: var(--sq); position: relative; display: grid; place-items: center; min-width: 0; min-height: 0;
+      font-size: calc(var(--bw) / 9 * .56); font-weight: 450; font-variant-numeric: tabular-nums; line-height: 1; }
+.sc.given { color: var(--text); font-weight: 560; }
+.sc.user { color: var(--blue); }
+.sc.wrong { color: var(--red); }
+.sc.peer { background: linear-gradient(var(--hl-peer), var(--hl-peer)), var(--sq); }
+.sc.same { background: linear-gradient(var(--hl-same), var(--hl-same)), var(--sq); }
+.sc.sel { background: linear-gradient(var(--hl-sel), var(--hl-sel)), var(--sq); }
+.sc.bad { animation: shake .35s; }
+@keyframes shake { 20%, 60% { transform: translateX(-3px); } 40%, 80% { transform: translateX(3px); } }
+.sc.wave { animation: wave .55s ease-out both; }
+@keyframes wave { 0% { background-color: var(--sq); } 35% { background: var(--blue); color: var(--crust); } 100% { } }
+.sc.pop { animation: popin .22s ease-out; }
+@keyframes popin { 0% { transform: scale(.6); opacity: .3; } 100% { transform: scale(1); opacity: 1; } }
+.notes { position: absolute; inset: 1px; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr);
+         font-size: calc(var(--bw) / 9 * .26); color: var(--sub); font-weight: 500; }
+.notes span { display: grid; place-items: center; border-radius: 3px; }
+.notes span.hl { background: var(--blue); color: var(--crust); font-weight: 700; }
+.veil { position: absolute; inset: 0; border-radius: 10px; background: var(--sq); display: grid; place-items: center; z-index: 2; }
+.veil .btn { font-size: 17px; padding: 14px 26px; }
+
+/* tools + pad */
+.tools { display: grid; grid-template-columns: repeat(4, 1fr); margin: 14px 0 6px; }
+.tool { display: flex; flex-direction: column; align-items: center; gap: 2px; color: var(--sub); font-size: 12px; padding: 6px 0; position: relative; }
+.tool .ic { font-size: 22px; line-height: 26px; color: var(--text); }
+.tool .badge { position: absolute; top: 0; left: calc(50% + 8px); min-width: 18px; height: 18px; border-radius: 9px; padding: 0 5px;
+               background: var(--surface2); color: var(--text); font-size: 11px; font-weight: 700; line-height: 18px; }
+.tool .badge.on { background: var(--peach); color: var(--crust); }
+.tool .badge.n { background: var(--blue); color: var(--crust); }
+.pad { display: grid; grid-template-columns: repeat(9, 1fr); gap: 4px; margin-top: 4px; }
+.num { display: flex; flex-direction: column; align-items: center; padding: 8px 0 6px; border-radius: 12px; color: var(--blue); }
+.num:active { background: var(--surface); }
+.num b { font-size: min(34px, calc(var(--bw) / 9 * .72)); font-weight: 450; line-height: 1.05; }
+.num small { font-size: 11px; color: var(--sub); height: 14px; }
+.num.done b { color: var(--overlay); font-size: 22px; line-height: 38px; }
+.num.noting b { color: var(--sub); }
+
+/* switches */
+.opt { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--surface2); }
+.opt:first-of-type { border-top: 0; }
+.sw { width: 46px; height: 28px; border-radius: 14px; background: var(--surface2); position: relative; flex: none; transition: background .15s; }
+.sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+.sw.on { background: var(--green); }
+.sw.on::after { transform: translateX(18px); }
+.big { font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.stack { display: grid; gap: 8px; }
+
+.fx { position: fixed; inset: 0; pointer-events: none; z-index: 30; overflow: hidden; }
+.confetto { position: fixed; width: 8px; height: 12px; border-radius: 2px; }
+</style>
+<link rel="stylesheet" href="../theme.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="engine.js"></script>
+<script src="../sfx.js"></script>
+<script>
+'use strict';
+const S = Sudoku;
+const KEY = 'mosaic:sudoku';
+const HINTS = 3;
+const LIMIT = 3;
+const app = document.getElementById('app');
+
+// ---- saved data (this phone only) ----------------------------------------------------------
+function blankStats() { return Object.fromEntries(S.LEVELS.map(l => [l, { played: 0, won: 0, best: 0, total: 0 }])); }
+let data;
+try { data = JSON.parse(localStorage.getItem(KEY)); } catch {}
+if (!data || data.v !== 1) data = { v: 1, game: null, stats: blankStats(), opts: { limit: true, autoNotes: true } };
+for (const l of S.LEVELS) data.stats[l] = data.stats[l] || { played: 0, won: 0, best: 0, total: 0 };
+function save() { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch {} }
+// Ask the browser not to evict our save (granted for home-screen apps on recent iOS; harmless elsewhere).
+try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch {}
+
+let screen = data.game && !data.game.over ? 'game' : 'home';
+let sel = null;          // selected cell index
+let noting = false;      // notes mode
+let fxCells = null;      // { cls, cells: [[i, delayMs]] } applied after the next render
+let tickLast = 0;
+
+const G = () => data.game;
+const valAt = i => Number(G().vals[i]);
+const solAt = i => Number(G().solution[i]);
+const isGiven = i => G().puzzle[i] !== '0';
+const isRight = i => valAt(i) && valAt(i) === solAt(i);
+const setVal = (i, v) => { const g = G(); g.vals = g.vals.slice(0, i) + v + g.vals.slice(i + 1); };
+const limitOf = g => LIMIT + (g.chances || 0);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function fmt(ms) {
+  const t = Math.floor(ms / 1000), h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, s = t % 60;
+  return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0');
+}
+function toast(msg, ms = 2200) {
+  document.querySelectorAll('.toast').forEach(t => t.remove());
+  const t = document.createElement('div');
+  t.className = 'toast'; t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), ms);
+}
+function sheet(html, wire) {
+  const m = document.createElement('div');
+  m.className = 'modal';
+  m.innerHTML = `<div class="sheet">${html}</div>`;
+  m.addEventListener('click', e => { if (e.target === m) close(); });
+  const close = () => m.remove();
+  document.body.appendChild(m);
+  wire(m, close);
+  return m;
+}
+
+// ---- game lifecycle ------------------------------------------------------------------------
+function startGame(level, seed = S.newSeed()) {
+  const p = S.generate(level, seed);
+  data.game = {
+    level, seed, code: S.encode(level, seed), puzzle: p.puzzle, solution: p.solution, vals: p.puzzle,
+    notes: new Array(81).fill(0), mistakes: 0, hints: 0, chances: 0, elapsed: 0, paused: false, over: null, hist: [],
+  };
+  data.stats[level].played++;
+  sel = null; noting = false; screen = 'game';
+  save(); render();
+}
+function restartGame() {
+  const g = G();
+  Object.assign(g, { vals: g.puzzle, notes: new Array(81).fill(0), mistakes: 0, hints: 0, chances: 0, elapsed: 0, paused: false, over: null, hist: [] });
+  sel = null; save(); render();
+}
+function finish(result) {
+  const g = G(), st = data.stats[g.level];
+  g.over = result; g.paused = false; sel = null;
+  let best = false;
+  if (result === 'won') {
+    st.won++; st.total += g.elapsed;
+    if (!st.best || g.elapsed < st.best) { st.best = g.elapsed; best = st.won > 1; }
+  }
+  save(); render();
+  if (result === 'won') { Sfx.fanfare(0.4); confetti(); setTimeout(() => wonSheet(best), 900); }
+  else { Sfx.sad(); setTimeout(lostSheet, 500); }
+}
+
+// ---- input ---------------------------------------------------------------------------------
+function canPlay() { const g = G(); return g && !g.over && !g.paused; }
+
+function input(d) {
+  if (!canPlay()) return;
+  if (sel == null) { toast('Tap a square first'); return; }
+  const g = G(), i = sel;
+  if (isGiven(i) || isRight(i)) return;
+  if (noting) {
+    if (valAt(i)) return;
+    g.hist.push({ i, val: 0, note: g.notes[i] });
+    g.notes[i] ^= 1 << d;
+    Sfx.tock(0, 1.6, 0.5);
+    save(); render();
+    return;
+  }
+  if (valAt(i) === d) return;
+  const h = { i, val: valAt(i), note: g.notes[i], peers: [] };
+  setVal(i, d); g.notes[i] = 0;
+  if (d === solAt(i)) {
+    if (data.opts.autoNotes) for (const p of S.PEERS[i]) if (g.notes[p] & (1 << d)) { h.peers.push([p, g.notes[p]]); g.notes[p] &= ~(1 << d); }
+    g.hist.push(h);
+    afterCorrect(i, 'pop');
+  } else {
+    g.hist.push(h);
+    g.mistakes++;
+    Sfx.thud(); Sfx.buzz(40);
+    fxCells = { cls: 'bad', cells: [[i, 0]] };
+    save(); render();
+    if (data.opts.limit && g.mistakes >= limitOf(g)) finish('lost');
+  }
+}
+
+// Shared by a correct entry and a hint: completed rows/columns/boxes wave, a finished board wins.
+function afterCorrect(i, cls) {
+  const g = G();
+  const done = S.UNITS_OF[i].filter(u => S.UNITS[u].every(isRight));
+  const cells = [[i, 0]];
+  if (done.length) {
+    const seen = new Set([i]);
+    for (const u of done) for (const j of S.UNITS[u]) if (!seen.has(j)) {
+      seen.add(j);
+      cells.push([j, 45 * (Math.abs(S.row(j) - S.row(i)) + Math.abs(S.col(j) - S.col(i)))]);
+    }
+    fxCells = { cls: 'wave', cells };
+    Sfx.arp(2 + done.length);
+  } else {
+    fxCells = { cls, cells };
+    Sfx.chime(2 + (solAt(i) % 5), 0, 0.7);
+  }
+  save(); render();
+  if ([...g.vals].every((v, k) => Number(v) === solAt(k))) finish('won');
+}
+
+function erase() {
+  if (!canPlay() || sel == null) return;
+  const g = G(), i = sel;
+  if (isGiven(i) || isRight(i)) return;
+  if (!valAt(i) && !g.notes[i]) return;
+  g.hist.push({ i, val: valAt(i), note: g.notes[i], peers: [] });
+  setVal(i, 0); g.notes[i] = 0;
+  Sfx.pop(); save(); render();
+}
+
+function undo() {
+  if (!canPlay()) return;
+  const g = G(), h = g.hist.pop();
+  if (!h) { toast('Nothing to undo'); return; }
+  setVal(h.i, h.val); g.notes[h.i] = h.note;
+  for (const [p, n] of h.peers || []) g.notes[p] = n;
+  sel = h.i;
+  Sfx.whoosh(); save(); render();
+}
+
+function useHint() {
+  if (!canPlay()) return;
+  const g = G();
+  if (g.hints >= HINTS) { toast('No hints left this game'); return; }
+  // Logic only sees correct digits; a wrong entry in the selected square gets fixed first.
+  const clean = [...g.vals].map((v, k) => (Number(v) === solAt(k) ? v : '0')).join('');
+  const wantSel = sel != null && !isRight(sel);
+  const h = wantSel ? { i: sel, v: solAt(sel), how: 'reveal' } : S.hint(clean, g.solution, null);
+  if (!h) return;
+  const why = {
+    naked: `${h.v} is the only number that fits here`,
+    row: `This is the only spot for ${h.v} in its row`,
+    col: `This is the only spot for ${h.v} in its column`,
+    box: `This is the only spot for ${h.v} in its box`,
+    reveal: `This square is ${h.v}`,
+  }[h.how];
+  g.hints++;
+  setVal(h.i, h.v); g.notes[h.i] = 0;
+  if (data.opts.autoNotes) for (const p of S.PEERS[h.i]) g.notes[p] &= ~(1 << h.v);
+  g.hist = g.hist.filter(x => x.i !== h.i);
+  sel = h.i;
+  toast(`💡 ${why}`, 3200);
+  afterCorrect(h.i, 'pop');
+}
+
+function setPaused(p) {
+  const g = G();
+  if (!g || g.over || g.paused === p) return;
+  g.paused = p; tickLast = performance.now();
+  save(); render();
+}
+
+// ---- timer ---------------------------------------------------------------------------------
+function running() { const g = G(); return screen === 'game' && g && !g.over && !g.paused && document.visibilityState === 'visible'; }
+setInterval(() => {
+  const now = performance.now();
+  if (running()) {
+    G().elapsed += Math.min(now - tickLast, 5000);
+    save();
+    const t = document.getElementById('clock');
+    if (t) t.textContent = fmt(G().elapsed);
+  }
+  tickLast = now;
+}, 1000);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && screen === 'game') setPaused(true);
+  tickLast = performance.now();
+});
+addEventListener('pagehide', save);
+
+// ---- render --------------------------------------------------------------------------------
+function render() {
+  if (screen === 'game' && G()) renderGame(); else renderHome();
+}
+
+function renderHome() {
+  screen = 'home';
+  const g = G(), st = data.stats;
+  const filled = g ? [...g.vals].filter((v, i) => Number(v) === solAt(i)).length : 0;
+  const open = g ? [...g.puzzle].filter(v => v === '0').length : 1;
+  const given = g ? 81 - open : 0;
+  app.innerHTML = `
+    <div class="topbar"><a class="back" href="../">‹ Mosaic</a>
+      <span class="icons"><button id="theme" aria-label="Colors">🎨</button></span></div>
+    <div class="hero">Sudoku</div>
+    <div class="muted" style="margin-bottom:14px">Saves as you go on this phone</div>
+    ${g && !g.over ? `<button class="card" id="cont" style="display:block;width:100%;text-align:left">
+      <div class="kicker">Continue<span>${fmt(g.elapsed)}</span></div>
+      <div class="row"><b class="grow" style="font-size:17px">${S.LEVEL_NAME[g.level]}</b>
+        <span class="muted" style="font-size:13px">${Math.round(((filled - given) / open) * 100)}% · ${g.mistakes} mistake${g.mistakes === 1 ? '' : 's'}</span>
+        <span class="muted">›</span></div>
+      <div class="bar-prog"><i style="width:${Math.round(((filled - given) / open) * 100)}%"></i></div></button>` : ''}
+    <div class="card"><div class="kicker">New game</div>
+      <div class="levels">${S.LEVELS.map(l => `<button class="lvl" data-level="${l}"><b>${S.LEVEL_NAME[l]}</b>
+        <span>${st[l].best ? 'Best ' + fmt(st[l].best) : st[l].played ? 'No wins yet' : 'Not played yet'}</span></button>`).join('')}</div></div>
+    <div class="card"><div class="kicker">Your stats</div>
+      <table class="stats"><tr><th></th><th>Won</th><th>Best</th><th>Average</th></tr>
+      ${S.LEVELS.map(l => `<tr><td>${S.LEVEL_NAME[l]}</td><td>${st[l].won}/${st[l].played}</td>
+        <td>${st[l].best ? fmt(st[l].best) : '—'}</td><td>${st[l].won ? fmt(st[l].total / st[l].won) : '—'}</td></tr>`).join('')}</table></div>
+    <div class="card how"><b>Saving.</b> Every move saves on this phone, and the clock pauses when you leave.
+      For a one-tap icon: Share › <b>Add to Home Screen</b> — then always open it from the icon,
+      since the icon and Safari keep separate saves.
+      <br><br><b>Same puzzle as a friend?</b> In a game, tap 🔗 to send a link to that exact grid.</div>`;
+  app.querySelector('#theme').onclick = Theme.open;
+  const c = app.querySelector('#cont');
+  if (c) c.onclick = () => { screen = 'game'; render(); };
+  app.querySelectorAll('[data-level]').forEach(b => b.onclick = () => confirmNew(b.dataset.level));
+}
+
+function confirmNew(level, seed) {
+  const g = G();
+  if (!g || g.over) { startGame(level, seed); return; }
+  sheet(`<div class="kicker">New ${S.LEVEL_NAME[level]} game</div>
+    <div style="margin-bottom:14px">Your ${S.LEVEL_NAME[g.level]} game in progress (${fmt(g.elapsed)}) will be replaced.</div>
+    <div class="stack"><button class="btn" id="go">Start new game</button><button class="btn ghost" id="no">Keep playing mine</button></div>`,
+  (m, close) => {
+    m.querySelector('#go').onclick = () => { close(); startGame(level, seed); };
+    m.querySelector('#no').onclick = () => { close(); screen = 'game'; render(); };
+  });
+}
+
+function renderGame() {
+  const g = G();
+  const selV = sel != null ? valAt(sel) : 0;
+  const counts = new Array(10).fill(0);
+  for (let i = 0; i < 81; i++) if (isRight(i)) counts[valAt(i)]++;
+  const hideBoard = g.paused;
+  let cells = '';
+  for (let b = 0; b < 9; b++) {
+    cells += '<div class="boxg">';
+    const r0 = Math.floor(b / 3) * 3, c0 = (b % 3) * 3;
+    for (let k = 0; k < 9; k++) {
+      const i = (r0 + Math.floor(k / 3)) * 9 + c0 + (k % 3), v = valAt(i);
+      const cls = ['sc'];
+      if (!hideBoard) {
+        if (v) cls.push(isGiven(i) ? 'given' : v === solAt(i) ? 'user' : 'wrong');
+        if (sel != null) {
+          if (i === sel) cls.push('sel');
+          else if (selV && v === selV) cls.push('same');
+          else if (S.row(i) === S.row(sel) || S.col(i) === S.col(sel) || S.box(i) === S.box(sel)) cls.push('peer');
+        }
+      }
+      let inner = '';
+      if (!hideBoard) {
+        if (v) inner = v;
+        else if (g.notes[i]) inner = `<div class="notes">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(d =>
+          `<span class="${selV === d && (g.notes[i] >> d) & 1 ? 'hl' : ''}">${(g.notes[i] >> d) & 1 ? d : ''}</span>`).join('')}</div>`;
+      }
+      cells += `<button class="${cls.join(' ')}" data-i="${i}" aria-label="Row ${S.row(i) + 1} column ${S.col(i) + 1}${v ? ', ' + v : ''}">${inner}</button>`;
+    }
+    cells += '</div>';
+  }
+  const lim = data.opts.limit ? limitOf(g) : 0;
+  app.innerHTML = `
+    <div class="topbar"><button class="back" id="home">‹ Sudoku</button>
+      <span class="ttl">${S.LEVEL_NAME[g.level]}</span>
+      <span class="icons"><button id="share" aria-label="Share this puzzle">🔗</button><button id="menu" aria-label="Settings">⚙︎</button></span></div>
+    <div class="info">
+      <div><small>Mistakes</small><b class="${lim && g.mistakes >= lim - 1 && g.mistakes ? 'warn' : ''}">${g.mistakes}${lim ? '/' + lim : ''}</b></div>
+      <div><small>Hints</small><b>${HINTS - g.hints}</b></div>
+      <div><small>Time</small><b id="clock">${fmt(g.elapsed)}</b></div>
+      <button class="pause" id="pause" aria-label="${g.paused ? 'Resume' : 'Pause'}" ${g.over ? 'disabled' : ''}>${g.paused ? '▶' : '❚❚'}</button>
+    </div>
+    <div class="wrap"><div class="board" id="board">${cells}</div>
+      ${g.paused ? `<div class="veil"><div style="text-align:center"><div class="muted" style="margin-bottom:12px">Paused · ${fmt(g.elapsed)}</div>
+        <button class="btn" id="resume">▶ Resume</button></div></div>` : ''}</div>
+    <div class="tools">
+      <button class="tool" id="undo"><span class="ic">↶</span>Undo</button>
+      <button class="tool" id="erase"><span class="ic">⌫</span>Erase</button>
+      <button class="tool" id="notes"><span class="ic">✎</span>Notes<span class="badge ${noting ? 'on' : ''}">${noting ? 'ON' : 'OFF'}</span></button>
+      <button class="tool" id="hint"><span class="ic">💡</span>Hint<span class="badge n">${HINTS - g.hints}</span></button>
+    </div>
+    <div class="pad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(d => counts[d] >= 9
+      ? `<button class="num done" disabled aria-label="${d} complete"><b>✓</b><small></small></button>`
+      : `<button class="num ${noting ? 'noting' : ''}" data-d="${d}"><b>${d}</b><small>${9 - counts[d]}</small></button>`).join('')}</div>
+    ${g.over ? `<div class="stack" style="margin-top:14px">
+      <button class="btn" id="again">New ${S.LEVEL_NAME[g.level]} game</button>
+      <button class="btn ghost" id="other">Other difficulty</button></div>` : ''}`;
+
+  app.querySelectorAll('.sc').forEach(c => c.onclick = () => {
+    if (!canPlay()) return;
+    const i = Number(c.dataset.i);
+    sel = i; render();
+  });
+  app.querySelectorAll('[data-d]').forEach(b => b.onclick = () => input(Number(b.dataset.d)));
+  app.querySelector('#home').onclick = () => { if (!g.over) setPaused(false); screen = 'home'; render(); };
+  app.querySelector('#undo').onclick = undo;
+  app.querySelector('#erase').onclick = erase;
+  app.querySelector('#notes').onclick = () => { if (!canPlay()) return; noting = !noting; render(); };
+  app.querySelector('#hint').onclick = useHint;
+  app.querySelector('#pause').onclick = () => setPaused(!g.paused);
+  const r = app.querySelector('#resume');
+  if (r) r.onclick = () => setPaused(false);
+  app.querySelector('#share').onclick = share;
+  app.querySelector('#menu').onclick = menu;
+  const a = app.querySelector('#again');
+  if (a) a.onclick = () => startGame(g.level);
+  const o = app.querySelector('#other');
+  if (o) o.onclick = () => { screen = 'home'; render(); };
+
+  if (fxCells) {
+    const { cls, cells: list } = fxCells;
+    fxCells = null;
+    for (const [i, delay] of list) {
+      const el = app.querySelector(`.sc[data-i="${i}"]`);
+      if (el) { el.style.animationDelay = delay + 'ms'; el.classList.add(cls); }
+    }
+  }
+}
+
+// ---- sheets --------------------------------------------------------------------------------
+function menu() {
+  const o = data.opts;
+  sheet(`<div class="kicker">Settings</div>
+    <div class="opt"><span class="grow">Mistake limit (${LIMIT})<br><span class="muted" style="font-size:12px">Game ends at ${LIMIT} wrong numbers</span></span><button class="sw ${o.limit ? 'on' : ''}" data-opt="limit"></button></div>
+    <div class="opt"><span class="grow">Auto-remove notes<br><span class="muted" style="font-size:12px">Placing a number clears it from notes nearby</span></span><button class="sw ${o.autoNotes ? 'on' : ''}" data-opt="autoNotes"></button></div>
+    <div class="opt"><span class="grow">Sound</span><button class="sw ${Sfx.muted ? '' : 'on'}" id="snd"></button></div>
+    <div class="opt"><span class="grow">Colors</span><button class="btn ghost" id="theme" style="padding:7px 12px;font-size:13px">🎨 Change</button></div>
+    <div class="stack" style="margin-top:12px">
+      <button class="btn ghost" id="restart">Restart this puzzle</button>
+      <button class="btn ghost" id="newg">New game…</button>
+      <button class="btn" id="done">Done</button></div>`,
+  (m, close) => {
+    m.querySelectorAll('[data-opt]').forEach(b => b.onclick = () => {
+      o[b.dataset.opt] = !o[b.dataset.opt]; b.classList.toggle('on', o[b.dataset.opt]); save(); render();
+    });
+    m.querySelector('#snd').onclick = e => { Sfx.toggle(); e.currentTarget.classList.toggle('on', !Sfx.muted); };
+    m.querySelector('#theme').onclick = () => { close(); Theme.open(); };
+    m.querySelector('#restart').onclick = () => { close(); restartGame(); };
+    m.querySelector('#newg').onclick = () => { close(); screen = 'home'; render(); };
+    m.querySelector('#done').onclick = close;
+  });
+}
+
+function wonSheet(best) {
+  const g = G(), st = data.stats[g.level];
+  sheet(`<div style="text-align:center">
+    <div style="font-size:40px">🎉</div><div class="kicker" style="justify-content:center">${S.LEVEL_NAME[g.level]} solved</div>
+    <div class="big">${fmt(g.elapsed)}</div>
+    <div class="muted" style="margin:4px 0 16px">${best ? '🏆 New best time · ' : st.best ? 'Best ' + fmt(st.best) + ' · ' : ''}${g.mistakes} mistake${g.mistakes === 1 ? '' : 's'} · ${g.hints} hint${g.hints === 1 ? '' : 's'}</div></div>
+    <div class="stack"><button class="btn" id="again">New ${S.LEVEL_NAME[g.level]} game</button>
+      <button class="btn ghost" id="share">🔗 Challenge someone with this grid</button>
+      <button class="btn ghost" id="home">Home</button></div>`,
+  (m, close) => {
+    m.querySelector('#again').onclick = () => { close(); startGame(g.level); };
+    m.querySelector('#share').onclick = () => { share(); };
+    m.querySelector('#home').onclick = () => { close(); screen = 'home'; render(); };
+  });
+}
+
+function lostSheet() {
+  const g = G();
+  sheet(`<div style="text-align:center"><div style="font-size:40px">😬</div>
+    <div class="kicker" style="justify-content:center">Out of mistakes</div>
+    <div class="muted" style="margin-bottom:16px">${g.mistakes} wrong numbers on this ${S.LEVEL_NAME[g.level]} grid.</div></div>
+    <div class="stack"><button class="btn" id="more">Second chance — keep going</button>
+      <button class="btn ghost" id="restart">Restart this puzzle</button>
+      <button class="btn ghost" id="newg">New game</button></div>`,
+  (m, close) => {
+    m.querySelector('#more').onclick = () => {
+      close();
+      // Undo the loss: the game continues with one more mistake allowed.
+      g.over = null; g.chances = (g.chances || 0) + 1; save(); render();
+    };
+    m.querySelector('#restart').onclick = () => { close(); restartGame(); };
+    m.querySelector('#newg').onclick = () => { close(); screen = 'home'; render(); };
+  });
+}
+
+function share() {
+  const g = G();
+  const url = location.origin + location.pathname + '#p=' + g.code;
+  const msg = g.over === 'won'
+    ? `Sudoku · ${S.LEVEL_NAME[g.level]} — I solved it in ${fmt(g.elapsed)}. Same grid, your turn: ${url}`
+    : `Sudoku · ${S.LEVEL_NAME[g.level]} — try this grid: ${url}`;
+  const copied = () => toast('Link copied — paste it in a text');
+  if (navigator.share) navigator.share({ text: msg }).catch(e => { if (e.name !== 'AbortError') copy(); });
+  else copy();
+  function copy() {
+    if (navigator.clipboard) navigator.clipboard.writeText(msg).then(copied, () => prompt('Copy this link:', msg));
+    else prompt('Copy this link:', msg);
+  }
+}
+
+function confetti() {
+  const fx = document.createElement('div');
+  fx.className = 'fx';
+  document.body.appendChild(fx);
+  const colors = ['#f38ba8', '#fab387', '#f9e2af', '#a6e3a1', '#89b4fa', '#cba6f7'];
+  for (let k = 0; k < 90; k++) {
+    const c = document.createElement('i');
+    c.className = 'confetto';
+    c.style.left = Math.random() * 100 + 'vw';
+    c.style.top = '-20px';
+    c.style.background = colors[k % colors.length];
+    fx.appendChild(c);
+    c.animate([
+      { transform: `translate(0,0) rotate(0)` },
+      { transform: `translate(${(Math.random() - .5) * 160}px, ${innerHeight + 60}px) rotate(${Math.random() * 900}deg)` },
+    ], { duration: 1600 + Math.random() * 1400, delay: Math.random() * 500, easing: 'cubic-bezier(.2,.6,.4,1)', fill: 'forwards' });
+  }
+  setTimeout(() => fx.remove(), 3800);
+}
+
+// ---- keyboard (desktop) --------------------------------------------------------------------
+document.addEventListener('keydown', e => {
+  if (screen !== 'game' || !G() || document.querySelector('.modal')) return;
+  const k = e.key;
+  if (k >= '1' && k <= '9') input(Number(k));
+  else if (k === 'Backspace' || k === 'Delete' || k === '0') erase();
+  else if (k === 'n' || k === 'N') { if (canPlay()) { noting = !noting; render(); } }
+  else if ((k === 'z' && (e.metaKey || e.ctrlKey)) || k === 'u') undo();
+  else if (k === ' ') { e.preventDefault(); setPaused(!G().paused); }
+  else if (k.startsWith('Arrow') && canPlay()) {
+    e.preventDefault();
+    const i = sel == null ? 40 : sel, r = S.row(i), c = S.col(i);
+    const [dr, dc] = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }[k];
+    sel = ((r + dr + 9) % 9) * 9 + ((c + dc + 9) % 9);
+    render();
+  } else return;
+});
+
+// ---- start ---------------------------------------------------------------------------------
+// A shared link (#p=x.k3f9a) opens that exact grid.
+function fromHash() {
+  const m = /[#&]p=([^&]+)/.exec(location.hash);
+  if (!m) return false;
+  history.replaceState(null, '', location.pathname);
+  const d = S.decode(decodeURIComponent(m[1]));
+  if (!d) { toast("That puzzle link didn't work"); return false; }
+  const g = G();
+  if (g && g.code === S.encode(d.level, d.seed)) { screen = 'game'; render(); return true; }
+  render();
+  confirmNew(d.level, d.seed);
+  return true;
+}
+// Coming back to a game in progress starts paused, so the clock never runs while nobody's looking.
+if (screen === 'game' && G() && !G().over) G().paused = true;
+tickLast = performance.now();
+addEventListener('hashchange', fromHash);
+if (!fromHash()) render();
+</script>
+</body>
+</html>
