@@ -21,7 +21,11 @@
   --blue: #89b4fa;
   --hl-sel: rgba(137,180,250,.42); --hl-peer: rgba(137,180,250,.09); --hl-same: rgba(137,180,250,.24);
   --line: #45475a; --line-thick: #7f849c; --sq: var(--mantle);
-  --bw: min(calc(100vw - 32px), 448px);
+  /* Board edge: nearly full width, capped on big screens, and shrunk on short ones so the number pad stays on screen. */
+  --bw: max(280px, min(calc(100vw - 12px), 528px, calc(100vh - 300px - env(safe-area-inset-top) - env(safe-area-inset-bottom))));
+}
+@supports (height: 100dvh) {
+  :root { --bw: max(280px, min(calc(100vw - 12px), 528px, calc(100dvh - 300px - env(safe-area-inset-top) - env(safe-area-inset-bottom)))); }
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; background: var(--bg); color: var(--text); }
@@ -30,6 +34,7 @@ body { font: 15px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, 
 button { font: inherit; color: inherit; border: 0; background: none; padding: 0; cursor: pointer; touch-action: manipulation; }
 button:disabled { opacity: .45; cursor: default; }
 #app { max-width: 480px; margin: 0 auto; padding: max(12px, env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom)); }
+#app.play { max-width: 540px; padding-left: 6px; padding-right: 6px; padding-bottom: calc(8px + env(safe-area-inset-bottom)); min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
 
 .card { background: var(--surface); border-radius: 16px; padding: 14px; margin-bottom: 12px; }
 .kicker { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--sub); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
@@ -63,20 +68,26 @@ button:disabled { opacity: .45; cursor: default; }
 .bar-prog i { display: block; height: 100%; background: var(--peach); border-radius: 3px; }
 
 /* game header */
-.info { display: grid; grid-template-columns: 1fr 1fr 1fr auto; align-items: end; gap: 6px; margin-bottom: 10px; text-align: center; font-variant-numeric: tabular-nums; }
-.info small { display: block; font-size: 11px; color: var(--sub); letter-spacing: .04em; }
-.info b { font-size: 16px; font-weight: 650; }
+.play .topbar { padding: 0 8px; margin-bottom: 8px; min-height: 44px; }
+.play .topbar .ttl { font-size: 22px; }
+.play .back { font-size: 17px; }
+.play .topbar .icons { gap: 18px; align-items: center; }
+.play .topbar .icons button { color: var(--ink-accent, var(--peach)); display: block; line-height: 0; }
+.play .topbar .icons svg { width: 27px; height: 27px; }
+.info { display: grid; grid-template-columns: 1fr 1fr 1fr auto; align-items: center; gap: 6px; padding: 0 8px; margin-bottom: 10px; text-align: center; font-variant-numeric: tabular-nums; }
+.info small { display: block; font-size: 15px; line-height: 20px; color: var(--sub); }
+.info b { font-size: 19px; line-height: 25px; font-weight: 600; }
 .info b.warn { color: var(--red); }
-.pause { width: 34px; height: 34px; border-radius: 50%; background: var(--surface); font-size: 13px; }
+.pause { width: 42px; height: 42px; border-radius: 50%; background: var(--surface); font-size: 15px; }
 
 /* board */
 .wrap { position: relative; width: var(--bw); margin: 0 auto; }
 .board { width: var(--bw); height: var(--bw); display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 2px; padding: 2px;
-         background: var(--line-thick); border-radius: 10px; overflow: hidden; }
+         background: var(--line-thick); border-radius: 3px; overflow: hidden; }
 .boxg { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); min-height: 0; gap: 1px; background: var(--line); }
 .sc { background: var(--sq); position: relative; display: grid; place-items: center; min-width: 0; min-height: 0;
-      font-size: calc(var(--bw) / 9 * .56); font-weight: 450; font-variant-numeric: tabular-nums; line-height: 1; }
-.sc.given { color: var(--text); font-weight: 560; }
+      font-size: calc(var(--bw) / 9 * .7); font-weight: 400; font-variant-numeric: tabular-nums; line-height: 1; }
+.sc.given { color: var(--text); }
 .sc.user { color: var(--blue); }
 .sc.wrong { color: var(--red); }
 .sc.peer { background: linear-gradient(var(--hl-peer), var(--hl-peer)), var(--sq); }
@@ -89,26 +100,27 @@ button:disabled { opacity: .45; cursor: default; }
 .sc.pop { animation: popin .22s ease-out; }
 @keyframes popin { 0% { transform: scale(.6); opacity: .3; } 100% { transform: scale(1); opacity: 1; } }
 .notes { position: absolute; inset: 1px; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr);
-         font-size: calc(var(--bw) / 9 * .26); color: var(--sub); font-weight: 500; }
+         font-size: calc(var(--bw) / 9 * .3); line-height: 1; color: var(--sub); font-weight: 500; }
 .notes span { display: grid; place-items: center; border-radius: 3px; }
 .notes span.hl { background: var(--blue); color: var(--crust); font-weight: 700; }
-.veil { position: absolute; inset: 0; border-radius: 10px; background: var(--sq); display: grid; place-items: center; z-index: 2; }
+.veil { position: absolute; inset: 0; border-radius: 3px; background: var(--sq); display: grid; place-items: center; z-index: 2; }
 .veil .btn { font-size: 17px; padding: 14px 26px; }
 
 /* tools + pad */
-.tools { display: grid; grid-template-columns: repeat(4, 1fr); margin: 14px 0 6px; }
-.tool { display: flex; flex-direction: column; align-items: center; gap: 2px; color: var(--sub); font-size: 12px; padding: 6px 0; position: relative; }
-.tool .ic { font-size: 22px; line-height: 26px; color: var(--text); }
-.tool .badge { position: absolute; top: 0; left: calc(50% + 8px); min-width: 18px; height: 18px; border-radius: 9px; padding: 0 5px;
-               background: var(--surface2); color: var(--text); font-size: 11px; font-weight: 700; line-height: 18px; }
+.controls { flex: 1; display: flex; flex-direction: column; justify-content: space-evenly; gap: 6px; padding-top: 6px; }
+.tools { display: grid; grid-template-columns: repeat(4, 1fr); }
+.tool { display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--sub); font-size: 15px; line-height: 20px; padding: 6px 0; position: relative; }
+.tool svg { width: 33px; height: 33px; color: var(--text); opacity: .75; }
+.tool .badge { position: absolute; top: 0; left: calc(50% + 9px); min-width: 24px; height: 22px; border-radius: 11px; padding: 0 6px;
+               background: var(--surface2); color: var(--text); font-size: 12px; font-weight: 700; line-height: 22px; }
 .tool .badge.on { background: var(--peach); color: var(--crust); }
-.tool .badge.n { background: var(--blue); color: var(--crust); }
-.pad { display: grid; grid-template-columns: repeat(9, 1fr); gap: 4px; margin-top: 4px; }
-.num { display: flex; flex-direction: column; align-items: center; padding: 8px 0 6px; border-radius: 12px; color: var(--blue); }
+.tool .badge.n { background: var(--blue); color: var(--crust); min-width: 22px; padding: 0 4px; }
+.pad { display: grid; grid-template-columns: repeat(9, 1fr); }
+.num { display: flex; flex-direction: column; align-items: center; padding: 4px 0 2px; border-radius: 12px; color: var(--blue); }
 .num:active { background: var(--surface); }
-.num b { font-size: min(34px, calc(var(--bw) / 9 * .72)); font-weight: 450; line-height: 1.05; }
-.num small { font-size: 11px; color: var(--sub); height: 14px; }
-.num.done b { color: var(--overlay); font-size: 22px; line-height: 38px; }
+.num b { font-size: calc(var(--bw) / 9 * 1.12); height: calc(var(--bw) / 9 * 1.22); line-height: calc(var(--bw) / 9 * 1.22); font-weight: 400; }
+.num small { font-size: 12px; line-height: 15px; color: var(--sub); height: 15px; }
+.num.done b { color: var(--overlay); font-size: calc(var(--bw) / 9 * .62); }
 .num.noting b { color: var(--sub); }
 
 /* switches */
@@ -137,6 +149,15 @@ const KEY = 'mosaic:sudoku';
 const HINTS = 3;
 const LIMIT = 3;
 const app = document.getElementById('app');
+const icon = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const ICON = {
+  undo: icon('<path d="M8 4 4 8l4 4"/><path d="M4 8h10a6 6 0 0 1 0 12H9"/>'),
+  erase: icon('<path d="m8 20-4.6-4.6a1.8 1.8 0 0 1 0-2.5l9.5-9.5a1.8 1.8 0 0 1 2.5 0l5.2 5.2a1.8 1.8 0 0 1 0 2.5L12 20z"/><path d="m7.5 8.8 7.7 7.7"/><path d="M8 20h13"/>'),
+  note: icon('<path d="m4 20 1-4.6L16.1 4.3a2 2 0 0 1 2.9 0l.7.7a2 2 0 0 1 0 2.9L8.6 19z"/><path d="m14.4 6 3.6 3.6"/>'),
+  hint: icon('<path d="M12 3a6.5 6.5 0 0 0-4 11.6c.7.6 1 1.2 1 2.4h6c0-1.2.3-1.8 1-2.4A6.5 6.5 0 0 0 12 3z"/><path d="M9.5 20h5"/><path d="M10.5 22.5h3"/>'),
+  link: icon('<path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/>'),
+  gear: icon('<path d="M9.0 4.9L9.9 2.3L14.1 2.3L15.0 4.9L17.4 3.7L20.3 6.6L19.1 9.1L21.7 9.9L21.7 14.1L19.1 15.0L20.3 17.4L17.4 20.3L14.9 19.1L14.1 21.7L9.9 21.7L9.0 19.1L6.6 20.3L3.7 17.4L4.9 14.9L2.3 14.1L2.3 9.9L4.9 9.0L3.7 6.6L6.6 3.7Z"/><circle cx="12" cy="12" r="3.2"/>'),
+};
 
 // ---- saved data (this phone only) ----------------------------------------------------------
 function blankStats() { return Object.fromEntries(S.LEVELS.map(l => [l, { played: 0, won: 0, best: 0, total: 0 }])); }
@@ -344,6 +365,7 @@ function render() {
 
 function renderHome() {
   screen = 'home';
+  app.className = '';
   const g = G(), st = data.stats;
   const filled = g ? [...g.vals].filter((v, i) => Number(v) === solAt(i)).length : 0;
   const open = g ? [...g.puzzle].filter(v => v === '0').length : 1;
@@ -420,10 +442,11 @@ function renderGame() {
     cells += '</div>';
   }
   const lim = data.opts.limit ? limitOf(g) : 0;
+  app.className = 'play';
   app.innerHTML = `
     <div class="topbar"><button class="back" id="home">‹ Sudoku</button>
       <span class="ttl">${S.LEVEL_NAME[g.level]}</span>
-      <span class="icons"><button id="share" aria-label="Share this puzzle">🔗</button><button id="menu" aria-label="Settings">⚙︎</button></span></div>
+      <span class="icons"><button id="share" aria-label="Share this puzzle">${ICON.link}</button><button id="menu" aria-label="Settings">${ICON.gear}</button></span></div>
     <div class="info">
       <div><small>Mistakes</small><b class="${lim && g.mistakes >= lim - 1 && g.mistakes ? 'warn' : ''}">${g.mistakes}${lim ? '/' + lim : ''}</b></div>
       <div><small>Hints</small><b>${HINTS - g.hints}</b></div>
@@ -433,15 +456,15 @@ function renderGame() {
     <div class="wrap"><div class="board" id="board">${cells}</div>
       ${g.paused ? `<div class="veil"><div style="text-align:center"><div class="muted" style="margin-bottom:12px">Paused · ${fmt(g.elapsed)}</div>
         <button class="btn" id="resume">▶ Resume</button></div></div>` : ''}</div>
-    <div class="tools">
-      <button class="tool" id="undo"><span class="ic">↶</span>Undo</button>
-      <button class="tool" id="erase"><span class="ic">⌫</span>Erase</button>
-      <button class="tool" id="notes"><span class="ic">✎</span>Notes<span class="badge ${noting ? 'on' : ''}">${noting ? 'ON' : 'OFF'}</span></button>
-      <button class="tool" id="hint"><span class="ic">💡</span>Hint<span class="badge n">${HINTS - g.hints}</span></button>
+    <div class="controls"><div class="tools">
+      <button class="tool" id="undo">${ICON.undo}Undo</button>
+      <button class="tool" id="erase">${ICON.erase}Erase</button>
+      <button class="tool" id="notes">${ICON.note}Notes<span class="badge ${noting ? 'on' : ''}">${noting ? 'ON' : 'OFF'}</span></button>
+      <button class="tool" id="hint">${ICON.hint}Hint<span class="badge n">${HINTS - g.hints}</span></button>
     </div>
     <div class="pad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(d => counts[d] >= 9
       ? `<button class="num done" disabled aria-label="${d} complete"><b>✓</b><small></small></button>`
-      : `<button class="num ${noting ? 'noting' : ''}" data-d="${d}"><b>${d}</b><small>${9 - counts[d]}</small></button>`).join('')}</div>
+      : `<button class="num ${noting ? 'noting' : ''}" data-d="${d}"><b>${d}</b><small>${9 - counts[d]}</small></button>`).join('')}</div></div>
     ${g.over ? `<div class="stack" style="margin-top:14px">
       <button class="btn" id="again">New ${S.LEVEL_NAME[g.level]} game</button>
       <button class="btn ghost" id="other">Other difficulty</button></div>` : ''}`;

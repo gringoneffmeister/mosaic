@@ -51,7 +51,7 @@
 [data-tone="light"] .cell.spot { box-shadow: inset 0 0 0 2px var(--peach); background: rgba(224,137,74,.16); }
 
 /* Sudoku: white cells and deeper blue digits on the light palettes. */
-:root[data-theme="beige"] { --blue: #2f5fb3; --hl-sel: rgba(47,95,179,.28); --hl-peer: rgba(47,95,179,.07); --hl-same: rgba(47,95,179,.17); --line: #e2d5bd; --line-thick: #8a7a62; --sq: #fffbf3; }
-:root[data-theme="light"] { --blue: #1e66f5; --hl-sel: rgba(30,102,245,.24); --hl-peer: rgba(30,102,245,.06); --hl-same: rgba(30,102,245,.15); --line: #d5dae5; --line-thick: #6c6f85; --sq: #ffffff; }
+:root[data-theme="beige"] { --blue: #2f5fb3; --hl-sel: rgba(47,95,179,.28); --hl-peer: rgba(47,95,179,.09); --hl-same: rgba(47,95,179,.2); --line: #d9cbb1; --line-thick: #5d5141; --sq: #fffbf3; }
+:root[data-theme="light"] { --blue: #1e66f5; --hl-sel: rgba(30,102,245,.24); --hl-peer: rgba(30,102,245,.08); --hl-same: rgba(30,102,245,.18); --line: #c5ccdb; --line-thick: #454a63; --sq: #ffffff; }
 [data-tone="light"] .board { box-shadow: 0 2px 10px rgba(60,45,20,.12); }
 [data-tone="light"] .notes span.hl { color: #fff; }
